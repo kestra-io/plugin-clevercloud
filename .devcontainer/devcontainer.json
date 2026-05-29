@@ -1,10 +1,10 @@
 {
-  "name": "plugin-template",
+  "name": "plugin-clevercloud",
   "build": {
     "context": ".",
     "dockerfile": "Dockerfile"
   },
-  "workspaceFolder": "/workspaces/plugin-template",
+  "workspaceFolder": "/workspaces/plugin-clevercloud",
   "forwardPorts": [8080],
   "customizations": {
     "vscode": {
