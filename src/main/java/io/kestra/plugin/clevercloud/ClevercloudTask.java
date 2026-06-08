@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 )
 @Plugin(
     examples = {
-        @io.kestra.core.models.annotations.ClevercloudTask(
+        @io.kestra.core.models.annotations.Example(
             title = "Simple revert",
             code = { "format: \"Text to be reverted\"" }
         )
