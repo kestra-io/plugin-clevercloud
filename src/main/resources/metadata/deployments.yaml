@@ -1,0 +1,8 @@
+group: io.kestra.plugin.clevercloud.deployments
+name: "deployments"
+title: "Deployments"
+description: "Tasks and triggers for managing Clever Cloud application deployments."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
