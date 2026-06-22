@@ -26,6 +26,7 @@ import lombok.experimental.SuperBuilder;
 import okhttp3.OkHttpClient;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -39,9 +40,16 @@ import java.util.concurrent.TimeUnit;
     title = "Trigger when a Clever Cloud application deployment reaches a target state.",
     description = """
         Polls the deployment list for a given application at each interval.
-        Fires an execution when a deployment transitions to the configured target state.
-        Only deployments discovered since the last successful poll are considered,
-        preventing the trigger from re-firing on already-processed deployments.
+        Fires an execution when a DEPLOY action deployment transitions to the configured target state.
+
+        Only DEPLOY action records are considered. UNDEPLOY records (e.g. from scaling or moderation)
+        are intentionally ignored so the trigger does not fire for infrastructure events unrelated to
+        a code deployment.
+
+        Dedup is timestamp-based: only deployments whose date (epoch milliseconds) is strictly after
+        the previous evaluation cutoff are considered, preventing re-fires on already-seen deployments.
+
+        Real state values from the Clever Cloud API: OK (success), FAIL (error), CANCELLED, WIP (in-progress).
         """
 )
 @Plugin(
@@ -62,7 +70,7 @@ import java.util.concurrent.TimeUnit;
                     tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    targetState: DEPLOY_OK
+                    targetState: OK
                     interval: PT1M
 
                 tasks:
@@ -80,7 +88,7 @@ public class DeploymentTrigger extends AbstractTrigger
         title = "OAuth consumer key.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> consumerKey;
 
@@ -88,7 +96,7 @@ public class DeploymentTrigger extends AbstractTrigger
         title = "OAuth consumer secret.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> consumerSecret;
 
@@ -96,7 +104,7 @@ public class DeploymentTrigger extends AbstractTrigger
         title = "OAuth access token.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> token;
 
@@ -104,9 +112,13 @@ public class DeploymentTrigger extends AbstractTrigger
         title = "OAuth access token secret.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> tokenSecret;
+
+    /** Overrides the Clever Cloud API base URL. Used in tests to point at a mock server. */
+    @PluginProperty(group = "advanced", hidden = true)
+    private Property<String> apiBaseUrl;
 
     @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal apps)")
     @PluginProperty(group = "main")
@@ -120,7 +132,7 @@ public class DeploymentTrigger extends AbstractTrigger
 
     @Schema(
         title = "Target deployment state that causes the trigger to fire.",
-        description = "Common values: DEPLOY_OK (successful deploy), DEPLOY_FAILED (failed deploy)."
+        description = "Real state values: OK (successful deploy), FAIL (failed deploy), CANCELLED."
     )
     @PluginProperty(group = "main")
     @NotNull
@@ -162,7 +174,8 @@ public class DeploymentTrigger extends AbstractTrigger
                 .readTimeout(30, TimeUnit.SECONDS)
                 .build());
 
-        var url = AbstractCleverCloudConnection.BASE_URL
+        var baseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
+        var url = baseUrl
             + "organisations/" + rOrgId
             + "/applications/" + rAppId
             + "/deployments?limit=10";
@@ -172,8 +185,15 @@ public class DeploymentTrigger extends AbstractTrigger
         var deployments = AbstractCleverCloudConnection.MAPPER.readValue(
             body, new TypeReference<ArrayList<Deployment>>() {});
 
+        // Timestamp-based dedup: only consider DEPLOY records that started after the last evaluation.
+        // context.getDate() is the ZonedDateTime of the previous evaluation (always present).
+        // UNDEPLOY records (scaling, moderation) are excluded so the trigger only fires on code deploys.
+        Instant cutoff = context.getDate().toInstant();
+
         var matched = deployments.stream()
+            .filter(d -> "DEPLOY".equals(d.getAction()))
             .filter(d -> rTargetState.equals(d.getState()))
+            .filter(d -> isAfterCutoff(d.getDate(), cutoff))
             .findFirst();
 
         if (matched.isEmpty()) {
@@ -181,15 +201,31 @@ public class DeploymentTrigger extends AbstractTrigger
         }
 
         var deployment = matched.get();
-        logger.info("Deployment {} reached target state {}", deployment.getId(), rTargetState);
+        logger.info("Deployment {} reached target state {}", deployment.getUuid(), rTargetState);
 
         var output = Output.builder()
-            .deploymentId(deployment.getId())
+            .deploymentId(deployment.getUuid())
             .state(deployment.getState())
             .commit(deployment.getCommit())
             .build();
 
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
+    }
+
+    /**
+     * Returns true when the deployment's date (epoch milliseconds string) is strictly after the cutoff.
+     * Returns false when the date is absent or unparseable so we skip rather than re-fire.
+     */
+    private static boolean isAfterCutoff(String epochMillisStr, Instant cutoff) {
+        if (epochMillisStr == null || epochMillisStr.isBlank()) {
+            return false;
+        }
+        try {
+            var deploymentInstant = Instant.ofEpochMilli(Long.parseLong(epochMillisStr));
+            return deploymentInstant.isAfter(cutoff);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Builder

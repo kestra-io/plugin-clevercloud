@@ -39,13 +39,12 @@ class GetTest {
             .addHeader("Content-Type", "application/json")
             .setBody("""
                 {
-                  "uuid": "deploy-789",
-                  "state": "DEPLOY_OK",
+                  "uuid": "deployment_5ea89906-3651-4ffc-989a-bf54db93a9c8",
+                  "state": "OK",
                   "commit": "cafe0001",
-                  "date": "2024-02-01T09:00:00Z",
-                  "endDate": "2024-02-01T09:03:00Z",
+                  "date": "1782127329927",
                   "action": "DEPLOY",
-                  "cause": "GIT"
+                  "cause": "Git"
                 }
                 """));
 
@@ -58,18 +57,19 @@ class GetTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .deploymentId(Property.of("deploy-789"))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .deploymentId(Property.of("deployment_5ea89906-3651-4ffc-989a-bf54db93a9c8"))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
         var output = task.run(runContext);
 
-        assertThat(output.getDeploymentId(), is("deploy-789"));
-        assertThat(output.getState(), is("DEPLOY_OK"));
+        assertThat(output.getDeploymentId(), is("deployment_5ea89906-3651-4ffc-989a-bf54db93a9c8"));
+        assertThat(output.getState(), is("OK"));
         assertThat(output.getCommit(), is("cafe0001"));
-        assertThat(output.getStartDate(), is("2024-02-01T09:00:00Z"));
-        assertThat(output.getEndDate(), is("2024-02-01T09:03:00Z"));
+        assertThat(output.getDate(), is("1782127329927"));
+        assertThat(output.getAction(), is("DEPLOY"));
+        assertThat(output.getCause(), is("Git"));
     }
 
     @Test
@@ -78,7 +78,7 @@ class GetTest {
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody("""
-                {"uuid":"d1","state":"DEPLOY_OK","commit":"a1b2c3d4"}
+                {"uuid":"deployment_d1","state":"OK","date":"1782127329927","action":"DEPLOY"}
                 """));
 
         var task = Get.builder()
@@ -90,33 +90,35 @@ class GetTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_abc"))
             .applicationId(Property.of("app_xyz"))
-            .deploymentId(Property.of("d1"))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .deploymentId(Property.of("deployment_d1"))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
         var request = mockServer.takeRequest();
-        assertThat(request.getPath(), containsString("/organisations/orga_abc/applications/app_xyz/deployments/d1"));
+        assertThat(request.getPath(), containsString("/organisations/orga_abc/applications/app_xyz/deployments/deployment_d1"));
     }
 
     @Test
-    void handlesNullEndDate() throws Exception {
+    void nullCommitForNonGitDeploy() throws Exception {
+        // UNDEPLOY records (e.g. from Killed/Moderated) have no commit field.
         mockServer.enqueue(new MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody("""
                 {
-                  "uuid": "deploy-wip",
-                  "state": "WIP",
-                  "commit": "deadbeef",
-                  "date": "2024-02-01T10:00:00Z"
+                  "uuid": "deployment_cb6f0557-7c84-46b2-837c-e121e54cde78",
+                  "state": "OK",
+                  "date": "1782127328326",
+                  "action": "UNDEPLOY",
+                  "cause": "Killed/Moderated"
                 }
                 """));
 
         var task = Get.builder()
-            .id("get-wip-test")
+            .id("get-undeploy-test")
             .type(Get.class.getName())
             .consumerKey(Property.of("ck"))
             .consumerSecret(Property.of("cs"))
@@ -124,14 +126,15 @@ class GetTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .deploymentId(Property.of("deploy-wip"))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .deploymentId(Property.of("deployment_cb6f0557-7c84-46b2-837c-e121e54cde78"))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
         var output = task.run(runContext);
 
-        assertThat(output.getState(), is("WIP"));
-        assertThat(output.getEndDate(), is(nullValue()));
+        assertThat(output.getState(), is("OK"));
+        assertThat(output.getAction(), is("UNDEPLOY"));
+        assertThat(output.getCommit(), is(nullValue()));
     }
 }

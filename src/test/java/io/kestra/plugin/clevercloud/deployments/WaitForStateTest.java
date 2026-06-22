@@ -41,7 +41,7 @@ class WaitForStateTest {
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody("""
-                {"uuid":"d1","state":"DEPLOY_OK","commit":"abc123"}
+                {"uuid":"deployment_d1","state":"OK","date":"1782127329927","action":"DEPLOY","commit":"abc123"}
                 """));
 
         var task = WaitForState.builder()
@@ -53,18 +53,18 @@ class WaitForStateTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .deploymentId(Property.of("d1"))
-            .targetState(Property.of("DEPLOY_OK"))
+            .deploymentId(Property.of("deployment_d1"))
+            .targetState(Property.of("OK"))
             .pollInterval(Property.of(Duration.ofMillis(10)))
             .timeout(Property.of(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
         var output = task.run(runContext);
 
-        assertThat(output.getDeploymentId(), is("d1"));
-        assertThat(output.getState(), is("DEPLOY_OK"));
+        assertThat(output.getDeploymentId(), is("deployment_d1"));
+        assertThat(output.getState(), is("OK"));
     }
 
     @Test
@@ -73,7 +73,7 @@ class WaitForStateTest {
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody("""
-                {"uuid":"d2","state":"DEPLOY_FAILED","commit":"bad1234"}
+                {"uuid":"deployment_d2","state":"FAIL","date":"1782127329927","action":"DEPLOY","commit":"bad1234"}
                 """));
 
         var task = WaitForState.builder()
@@ -85,17 +85,48 @@ class WaitForStateTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .deploymentId(Property.of("d2"))
-            .targetState(Property.of("DEPLOY_OK"))
+            .deploymentId(Property.of("deployment_d2"))
+            .targetState(Property.of("OK"))
             .pollInterval(Property.of(Duration.ofMillis(10)))
             .timeout(Property.of(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
         var ex = assertThrows(IllegalStateException.class, () -> task.run(runContext));
-        assertThat(ex.getMessage(), containsString("DEPLOY_FAILED"));
-        assertThat(ex.getMessage(), containsString("expected DEPLOY_OK"));
+        assertThat(ex.getMessage(), containsString("FAIL"));
+        assertThat(ex.getMessage(), containsString("expected OK"));
+    }
+
+    @Test
+    void throwsOnCancelledState() {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                {"uuid":"deployment_d5","state":"CANCELLED","date":"1782127287203","action":"DEPLOY","commit":"abc"}
+                """));
+
+        var task = WaitForState.builder()
+            .id("wait-cancelled-test")
+            .type(WaitForState.class.getName())
+            .consumerKey(Property.of("ck"))
+            .consumerSecret(Property.of("cs"))
+            .token(Property.of("tk"))
+            .tokenSecret(Property.of("ts"))
+            .organisationId(Property.of("orga_test"))
+            .applicationId(Property.of("app_test"))
+            .deploymentId(Property.of("deployment_d5"))
+            .targetState(Property.of("OK"))
+            .pollInterval(Property.of(Duration.ofMillis(10)))
+            .timeout(Property.of(Duration.ofSeconds(5)))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        var ex = assertThrows(IllegalStateException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("CANCELLED"));
+        assertThat(ex.getMessage(), containsString("expected OK"));
     }
 
     @Test
@@ -104,13 +135,13 @@ class WaitForStateTest {
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody("""
-                {"uuid":"d3","state":"WIP","commit":"poll0001"}
+                {"uuid":"deployment_d3","state":"WIP","date":"1782127287203","action":"DEPLOY","commit":"poll0001"}
                 """));
         mockServer.enqueue(new MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
             .setBody("""
-                {"uuid":"d3","state":"DEPLOY_OK","commit":"poll0001"}
+                {"uuid":"deployment_d3","state":"OK","date":"1782127287203","action":"DEPLOY","commit":"poll0001"}
                 """));
 
         var task = WaitForState.builder()
@@ -122,18 +153,18 @@ class WaitForStateTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .deploymentId(Property.of("d3"))
-            .targetState(Property.of("DEPLOY_OK"))
+            .deploymentId(Property.of("deployment_d3"))
+            .targetState(Property.of("OK"))
             .pollInterval(Property.of(Duration.ofMillis(50)))
             .timeout(Property.of(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
         var output = task.run(runContext);
 
         assertThat(mockServer.getRequestCount(), is(2));
-        assertThat(output.getState(), is("DEPLOY_OK"));
+        assertThat(output.getState(), is("OK"));
     }
 
     @Test
@@ -143,7 +174,7 @@ class WaitForStateTest {
                 .setResponseCode(200)
                 .addHeader("Content-Type", "application/json")
                 .setBody("""
-                    {"uuid":"d4","state":"WIP","commit":"stuck0001"}
+                    {"uuid":"deployment_d4","state":"WIP","date":"1782127287203","action":"DEPLOY","commit":"stuck0001"}
                     """));
         }
 
@@ -156,11 +187,11 @@ class WaitForStateTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .deploymentId(Property.of("d4"))
-            .targetState(Property.of("DEPLOY_OK"))
+            .deploymentId(Property.of("deployment_d4"))
+            .targetState(Property.of("OK"))
             .pollInterval(Property.of(Duration.ofMillis(10)))
             .timeout(Property.of(Duration.ofMillis(50)))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();

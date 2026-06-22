@@ -64,6 +64,20 @@ dependencies {
  **********************************************************************************************************************/
 test {
     useJUnitPlatform()
+    // Pass Clever Cloud integration test credentials from the environment when present.
+    // The integration tests guard themselves with @EnabledIfEnvironmentVariable so these are
+    // ignored when the vars are absent.
+    [
+        "CLEVER_CONSUMER_KEY",
+        "CLEVER_CONSUMER_SECRET",
+        "CLEVER_TOKEN",
+        "CLEVER_SECRET",
+        "CLEVER_ORG_ID",
+        "CLEVER_APP_ID"
+    ].each { key ->
+        def val = System.getenv(key)
+        if (val) environment key, val
+    }
 }
 
 testlogger {

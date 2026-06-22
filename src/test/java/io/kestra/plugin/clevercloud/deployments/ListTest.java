@@ -40,20 +40,20 @@ class ListTest {
             .setBody("""
                 [
                   {
-                    "uuid": "deploy-123",
-                    "state": "DEPLOY_OK",
+                    "uuid": "deployment_abc123",
+                    "state": "OK",
                     "commit": "abc1234",
-                    "date": "2024-01-15T10:00:00Z",
-                    "endDate": "2024-01-15T10:05:00Z",
+                    "date": "1782127329927",
                     "action": "DEPLOY",
-                    "cause": "GIT"
+                    "cause": "Git"
                   },
                   {
-                    "uuid": "deploy-456",
+                    "uuid": "deployment_def456",
                     "state": "WIP",
                     "commit": "def5678",
-                    "date": "2024-01-15T11:00:00Z",
-                    "action": "DEPLOY"
+                    "date": "1782127287203",
+                    "action": "DEPLOY",
+                    "cause": "Git"
                   }
                 ]
                 """));
@@ -67,7 +67,7 @@ class ListTest {
             .tokenSecret(Property.of("test-token-secret"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -75,10 +75,13 @@ class ListTest {
 
         assertThat(output.getTotal(), is(2));
         assertThat(output.getDeployments(), hasSize(2));
-        assertThat(output.getDeployments().getFirst().getId(), is("deploy-123"));
-        assertThat(output.getDeployments().getFirst().getState(), is("DEPLOY_OK"));
+        assertThat(output.getDeployments().getFirst().getUuid(), is("deployment_abc123"));
+        assertThat(output.getDeployments().getFirst().getState(), is("OK"));
         assertThat(output.getDeployments().getFirst().getCommit(), is("abc1234"));
-        assertThat(output.getDeployments().get(1).getId(), is("deploy-456"));
+        assertThat(output.getDeployments().getFirst().getDate(), is("1782127329927"));
+        assertThat(output.getDeployments().getFirst().getAction(), is("DEPLOY"));
+        assertThat(output.getDeployments().get(1).getUuid(), is("deployment_def456"));
+        assertThat(output.getDeployments().get(1).getState(), is("WIP"));
     }
 
     @Test
@@ -98,7 +101,7 @@ class ListTest {
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
             .limit(Property.of(5))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -124,7 +127,7 @@ class ListTest {
             .tokenSecret(Property.of("ts"))
             .organisationId(Property.of("orga_test"))
             .applicationId(Property.of("app_test"))
-            .apiBaseUrl(Property.of(mockServer.url("/v4/").toString()))
+            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
             .build();
 
         var runContext = runContextFactory.of();

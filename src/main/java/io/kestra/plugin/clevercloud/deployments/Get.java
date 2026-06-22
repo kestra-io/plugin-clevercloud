@@ -21,8 +21,9 @@ import lombok.experimental.SuperBuilder;
 @Schema(
     title = "Get details of a specific Clever Cloud deployment.",
     description = """
-        Retrieves a single deployment by its ID, returning its state, commit SHA,
-        start date, and end date.
+        Retrieves a single deployment by its ID. Returns the deployment state, action,
+        cause, date (epoch milliseconds), and the git commit SHA when available.
+        Terminal states are OK (success), FAIL (error), and CANCELLED.
         """
 )
 @Plugin(
@@ -84,11 +85,12 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         var deployment = MAPPER.readValue(body, Deployment.class);
 
         return Output.builder()
-            .deploymentId(deployment.getId())
+            .deploymentId(deployment.getUuid())
             .state(deployment.getState())
+            .action(deployment.getAction())
+            .cause(deployment.getCause())
+            .date(deployment.getDate())
             .commit(deployment.getCommit())
-            .startDate(deployment.getStartDate())
-            .endDate(deployment.getEndDate())
             .build();
     }
 
@@ -99,16 +101,22 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         @Schema(title = "Deployment ID")
         private final String deploymentId;
 
-        @Schema(title = "Current state of the deployment (e.g. DEPLOY_OK, DEPLOY_FAILED, WIP)")
+        @Schema(
+            title = "Current state of the deployment.",
+            description = "WIP means in-progress. Terminal states: OK (success), FAIL (error), CANCELLED."
+        )
         private final String state;
 
-        @Schema(title = "Git commit SHA associated with this deployment")
+        @Schema(title = "Action type: DEPLOY or UNDEPLOY")
+        private final String action;
+
+        @Schema(title = "Deployment trigger cause, e.g. Git, API, Console")
+        private final String cause;
+
+        @Schema(title = "Deployment timestamp as epoch milliseconds string")
+        private final String date;
+
+        @Schema(title = "Git commit SHA associated with this deployment. Null for non-Git deploys.")
         private final String commit;
-
-        @Schema(title = "ISO-8601 timestamp when the deployment started")
-        private final String startDate;
-
-        @Schema(title = "ISO-8601 timestamp when the deployment ended, null if still in progress")
-        private final String endDate;
     }
 }

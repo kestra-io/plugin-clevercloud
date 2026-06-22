@@ -25,9 +25,11 @@ import java.time.Instant;
     title = "Wait for a Clever Cloud deployment to reach a target state.",
     description = """
         Polls a deployment at a configurable interval until it reaches one of the terminal
-        states (DEPLOY_OK, DEPLOY_FAILED) or the specified target state.
-        Throws a timeout exception when the deployment does not reach the target within the
-        configured duration.
+        states (OK, FAIL, CANCELLED) or the specified target state.
+
+        WIP means the deployment is still in progress. A successful deployment has state OK
+        and action DEPLOY. Throws when the deployment reaches a terminal state that is not
+        the target, or when the timeout elapses.
         """
 )
 @Plugin(
@@ -49,7 +51,7 @@ import java.time.Instant;
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     deploymentId: "{{ inputs.deploymentId }}"
-                    targetState: DEPLOY_OK
+                    targetState: OK
                     pollInterval: PT10S
                     timeout: PT10M
                 """
@@ -75,7 +77,12 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
 
     @Schema(
         title = "Target state to wait for.",
-        description = "DEPLOY_OK means the deployment completed successfully. DEPLOY_FAILED means it failed. WIP means still in progress."
+        description = """
+            Real state values from the Clever Cloud API:
+            OK (deployment succeeded), FAIL (deployment errored), CANCELLED (deployment cancelled),
+            WIP (still in progress, not a terminal state).
+            Use OK to wait for a successful deploy.
+            """
     )
     @PluginProperty(group = "main")
     @NotNull
@@ -132,7 +139,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
                     .build();
             }
 
-            // A terminal state that is not the target means we should stop waiting
+            // A terminal state that is not the target means the deployment ended unexpectedly.
             if (isTerminal(currentState) && !rTargetState.equals(currentState)) {
                 throw new IllegalStateException(
                     "Deployment " + rDeployId + " reached state " + currentState + " but expected " + rTargetState
@@ -150,8 +157,9 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         }
     }
 
+    /** OK, FAIL, and CANCELLED are terminal. WIP is the only in-progress state. */
     private boolean isTerminal(String state) {
-        return "DEPLOY_OK".equals(state) || "DEPLOY_FAILED".equals(state);
+        return "OK".equals(state) || "FAIL".equals(state) || "CANCELLED".equals(state);
     }
 
     @Builder

@@ -1,37 +1,35 @@
 package io.kestra.plugin.clevercloud.deployments.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Represents a single deployment object as returned by the Clever Cloud API.
+ * Represents a single deployment object as returned by the Clever Cloud v2 API.
  * Unknown fields are silently ignored so new API fields do not break deserialization.
+ *
+ * Field names match the real API exactly: uuid, date (epoch millis string),
+ * state (WIP | OK | FAIL | CANCELLED), action (DEPLOY | UNDEPLOY), cause, commit.
  */
 @Data
 @NoArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Deployment {
 
-    @JsonProperty("uuid")
-    private String id;
+    /** Deployment identifier, e.g. deployment_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
+    private String uuid;
 
-    @JsonProperty("state")
+    /** Epoch milliseconds as a string, e.g. "1782127329927" */
+    private String date;
+
+    /** WIP (in-progress), OK (success), FAIL (error), or CANCELLED */
     private String state;
 
-    @JsonProperty("commit")
-    private String commit;
-
-    @JsonProperty("date")
-    private String startDate;
-
-    @JsonProperty("endDate")
-    private String endDate;
-
-    @JsonProperty("action")
+    /** DEPLOY or UNDEPLOY */
     private String action;
 
-    @JsonProperty("cause")
     private String cause;
+
+    /** Git commit SHA. Null for non-Git triggers. */
+    private String commit;
 }

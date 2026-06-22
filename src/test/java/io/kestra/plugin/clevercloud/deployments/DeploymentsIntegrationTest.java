@@ -49,12 +49,12 @@ class DeploymentsIntegrationTest {
         assertThat("deployments list must not be null", output.getDeployments(), is(notNullValue()));
         assertThat("total must match list size", output.getTotal(), is(output.getDeployments().size()));
 
-        System.out.println("[integration] Real API returned " + output.getTotal() + " deployment(s) for app " + appId);
         runContext.logger().info("Real API returned {} deployment(s) for app {}", output.getTotal(), appId);
 
         if (!output.getDeployments().isEmpty()) {
             var first = output.getDeployments().getFirst();
-            runContext.logger().info("First deployment: id={} state={} commit={}", first.getId(), first.getState(), first.getCommit());
+            runContext.logger().info("First deployment: uuid={} state={} action={} cause={} commit={}",
+                first.getUuid(), first.getState(), first.getAction(), first.getCause(), first.getCommit());
 
             var getTask = Get.builder()
                 .id("integration-get")
@@ -65,16 +65,18 @@ class DeploymentsIntegrationTest {
                 .tokenSecret(Property.of(tokenSecret))
                 .organisationId(Property.of(orgId))
                 .applicationId(Property.of(appId))
-                .deploymentId(Property.of(first.getId()))
+                .deploymentId(Property.of(first.getUuid()))
                 .build();
 
             var getOutput = getTask.run(runContextFactory.of());
 
             assertThat("Get output must not be null", getOutput, is(notNullValue()));
-            assertThat("Get deploymentId must match", getOutput.getDeploymentId(), is(first.getId()));
+            assertThat("Get deploymentId must match", getOutput.getDeploymentId(), is(first.getUuid()));
             assertThat("Get state must not be null", getOutput.getState(), is(notNullValue()));
 
-            runContext.logger().info("Get response: id={} state={} startDate={}", getOutput.getDeploymentId(), getOutput.getState(), getOutput.getStartDate());
+            runContext.logger().info("Get response: uuid={} state={} action={} date={} commit={}",
+                getOutput.getDeploymentId(), getOutput.getState(), getOutput.getAction(),
+                getOutput.getDate(), getOutput.getCommit());
         }
     }
 }
