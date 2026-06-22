@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor
 public abstract class AbstractCleverCloudConnection extends Task {
 
-    public static final String BASE_URL = "https://api.clever-cloud.com/v4/";
+    public static final String BASE_URL = "https://api.clever-cloud.com/v2/";
 
     /**
      * Overrides the Clever Cloud API base URL. Used in tests to point at a mock server.
@@ -51,7 +51,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
         title = "OAuth consumer key.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> consumerKey;
 
@@ -59,7 +59,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
         title = "OAuth consumer secret.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> consumerSecret;
 
@@ -67,7 +67,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
         title = "OAuth access token.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> token;
 
@@ -75,7 +75,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
         title = "OAuth access token secret.",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> tokenSecret;
 
