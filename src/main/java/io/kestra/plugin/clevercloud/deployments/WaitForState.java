@@ -94,7 +94,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     )
     @PluginProperty(group = "reliability")
     @Builder.Default
-    private Property<Duration> pollInterval = Property.of(Duration.ofSeconds(15));
+    private Property<Duration> pollInterval = Property.ofValue(Duration.ofSeconds(15));
 
     @Schema(
         title = "Maximum time to wait before aborting.",
@@ -102,7 +102,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     )
     @PluginProperty(group = "reliability")
     @Builder.Default
-    private Property<Duration> timeout = Property.of(Duration.ofMinutes(30));
+    private Property<Duration> timeout = Property.ofValue(Duration.ofMinutes(30));
 
     @Override
     public Output run(RunContext runContext) throws Exception {

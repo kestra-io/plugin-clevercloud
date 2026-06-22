@@ -51,15 +51,15 @@ class DeploymentTriggerTest {
         return DeploymentTrigger.builder()
             .id("trigger-test")
             .type(DeploymentTrigger.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .applicationId(Property.of("app_test"))
-            .targetState(Property.of("OK"))
+            .consumerKey(Property.ofValue("ck"))
+            .consumerSecret(Property.ofValue("cs"))
+            .token(Property.ofValue("tk"))
+            .tokenSecret(Property.ofValue("ts"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_test"))
+            .targetState(Property.ofValue("OK"))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
             .build();
     }
 

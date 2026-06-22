@@ -34,12 +34,12 @@ class DeploymentsIntegrationTest {
         var task = List.builder()
             .id("integration-list")
             .type(List.class.getName())
-            .consumerKey(Property.of(consumerKey))
-            .consumerSecret(Property.of(consumerSecret))
-            .token(Property.of(token))
-            .tokenSecret(Property.of(tokenSecret))
-            .organisationId(Property.of(orgId))
-            .applicationId(Property.of(appId))
+            .consumerKey(Property.ofValue(consumerKey))
+            .consumerSecret(Property.ofValue(consumerSecret))
+            .token(Property.ofValue(token))
+            .tokenSecret(Property.ofValue(tokenSecret))
+            .organisationId(Property.ofValue(orgId))
+            .applicationId(Property.ofValue(appId))
             .build();
 
         var runContext = runContextFactory.of();
@@ -59,13 +59,13 @@ class DeploymentsIntegrationTest {
             var getTask = Get.builder()
                 .id("integration-get")
                 .type(Get.class.getName())
-                .consumerKey(Property.of(consumerKey))
-                .consumerSecret(Property.of(consumerSecret))
-                .token(Property.of(token))
-                .tokenSecret(Property.of(tokenSecret))
-                .organisationId(Property.of(orgId))
-                .applicationId(Property.of(appId))
-                .deploymentId(Property.of(first.getUuid()))
+                .consumerKey(Property.ofValue(consumerKey))
+                .consumerSecret(Property.ofValue(consumerSecret))
+                .token(Property.ofValue(token))
+                .tokenSecret(Property.ofValue(tokenSecret))
+                .organisationId(Property.ofValue(orgId))
+                .applicationId(Property.ofValue(appId))
+                .deploymentId(Property.ofValue(first.getUuid()))
                 .build();
 
             var getOutput = getTask.run(runContextFactory.of());
