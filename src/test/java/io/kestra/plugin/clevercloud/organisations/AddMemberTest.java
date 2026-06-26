@@ -3,6 +3,7 @@ package io.kestra.plugin.clevercloud.organisations;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.plugin.clevercloud.organisations.model.OrgRole;
 import jakarta.inject.Inject;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -34,7 +35,6 @@ class AddMemberTest {
 
     @Test
     void sendsPostWithEmailAndRole() throws Exception {
-        // CC API returns 200 with the new member object when the member is added.
         mockServer.enqueue(new MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
@@ -51,14 +51,11 @@ class AddMemberTest {
         var task = AddMember.builder()
             .id("add-member-test")
             .type(AddMember.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .email(Property.of("newdev@example.com"))
-            .role(Property.of("DEVELOPER"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .email(Property.ofValue("newdev@example.com"))
+            .role(Property.ofValue(OrgRole.DEVELOPER))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -82,14 +79,11 @@ class AddMemberTest {
         var task = AddMember.builder()
             .id("add-member-ct-test")
             .type(AddMember.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .email(Property.of("user@example.com"))
-            .role(Property.of("READ_ONLY"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .email(Property.ofValue("user@example.com"))
+            .role(Property.ofValue(OrgRole.READ_ONLY))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -97,5 +91,26 @@ class AddMemberTest {
 
         var request = mockServer.takeRequest();
         assertThat(request.getHeader("Content-Type"), containsString("application/json"));
+    }
+
+    @Test
+    void serialisesRoleNameCorrectly() throws Exception {
+        mockServer.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
+
+        var task = AddMember.builder()
+            .id("add-member-role-test")
+            .type(AddMember.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .email(Property.ofValue("ro@example.com"))
+            .role(Property.ofValue(OrgRole.READ_ONLY))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getBody().readUtf8(), containsString("READ_ONLY"));
     }
 }

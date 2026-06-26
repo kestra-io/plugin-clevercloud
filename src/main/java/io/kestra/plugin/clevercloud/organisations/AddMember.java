@@ -8,6 +8,7 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.VoidOutput;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
+import io.kestra.plugin.clevercloud.organisations.model.OrgRole;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -68,13 +69,13 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
     @Schema(
         title = "Role to assign to the new member.",
         description = """
-            Valid values: ADMIN, MANAGER, DEVELOPER, ACCOUNTING, READ_ONLY.
-            ADMIN has full control. DEVELOPER can deploy. READ_ONLY has view-only access.
+            Accepts: ADMIN (full control), MANAGER, DEVELOPER (can deploy),
+            ACCOUNTING, READ_ONLY (view-only access).
             """
     )
     @PluginProperty(group = "main")
     @NotNull
-    private Property<String> role;
+    private Property<OrgRole> role;
 
     @Override
     public VoidOutput run(RunContext runContext) throws Exception {
@@ -83,10 +84,10 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rEmail = runContext.render(email).as(String.class).orElseThrow();
-        var rRole = runContext.render(role).as(String.class).orElseThrow();
+        var rRole = runContext.render(role).as(OrgRole.class).orElseThrow();
 
         var url = baseUrl(runContext) + "organisations/" + rOrgId + "/members";
-        var jsonBody = MAPPER.writeValueAsString(java.util.Map.of("email", rEmail, "role", rRole));
+        var jsonBody = MAPPER.writeValueAsString(java.util.Map.of("email", rEmail, "role", rRole.name()));
 
         logger.info("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);
         client.post(url, jsonBody);

@@ -1,8 +1,6 @@
 package io.kestra.plugin.clevercloud.organisations;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.github.scribejava.core.builder.ServiceBuilder;
-import com.github.scribejava.core.model.OAuth1AccessToken;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -17,13 +15,11 @@ import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.storages.kv.KVMetadata;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
-import io.kestra.plugin.clevercloud.CleverCloudApi;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import okhttp3.OkHttpClient;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,7 +27,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @SuperBuilder
@@ -119,6 +114,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     @NotNull
     private Property<String> tokenSecret;
 
+    @Schema(title = "Override the Clever Cloud API base URL.", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
@@ -165,18 +161,10 @@ public class MemberChangeTrigger extends AbstractTrigger
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rEvent = runContext.render(event).as(MemberEvent.class).orElse(MemberEvent.MEMBER_CHANGED);
 
-        var service = new ServiceBuilder(rConsumerKey)
-            .apiSecret(rConsumerSecret)
-            .build(new CleverCloudApi());
-        var accessToken = new OAuth1AccessToken(rToken, rTokenSecret);
-        var client = new AbstractCleverCloudConnection.SignedClient(service, accessToken,
-            new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build());
+        var rBaseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
+        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret, rBaseUrl);
 
-        var baseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
-        var url = baseUrl + "organisations/" + rOrgId + "/members";
+        var url = rBaseUrl + "organisations/" + rOrgId + "/members";
 
         logger.debug("Polling members for organisation {}", rOrgId);
         var body = client.get(url);
