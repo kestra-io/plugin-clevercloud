@@ -8,6 +8,7 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.deployments.model.Deployment;
+import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -78,15 +79,14 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     @Schema(
         title = "Target state to wait for.",
         description = """
-            Real state values from the Clever Cloud API:
-            OK (deployment succeeded), FAIL (deployment errored), CANCELLED (deployment cancelled),
+            Accepts: OK (deployment succeeded), FAIL (deployment errored), CANCELLED (deployment cancelled),
             WIP (still in progress, not a terminal state).
             Use OK to wait for a successful deploy.
             """
     )
     @PluginProperty(group = "main")
     @NotNull
-    private Property<String> targetState;
+    private Property<DeploymentState> targetState;
 
     @Schema(
         title = "How often to poll the deployment status.",
@@ -112,7 +112,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rAppId = runContext.render(applicationId).as(String.class).orElseThrow();
         var rDeployId = runContext.render(deploymentId).as(String.class).orElseThrow();
-        var rTargetState = runContext.render(targetState).as(String.class).orElseThrow();
+        var rTargetState = runContext.render(targetState).as(DeploymentState.class).orElseThrow();
         var rPollInterval = runContext.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(15));
         var rTimeout = runContext.render(timeout).as(Duration.class).orElse(Duration.ofMinutes(30));
 
@@ -127,25 +127,26 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         while (true) {
             var body = client.get(url);
             var deployment = MAPPER.readValue(body, Deployment.class);
-            var currentState = deployment.getState();
+            var currentState = DeploymentState.valueOf(deployment.getState());
 
             logger.debug("Deployment {} state: {}", rDeployId, currentState);
 
-            if (rTargetState.equals(currentState)) {
-                logger.info("Deployment {} reached target state {}", rDeployId, rTargetState);
+            if (rTargetState == currentState) {
+                logger.info("Deployment {} reached target state {}", rDeployId, currentState);
                 return Output.builder()
                     .deploymentId(rDeployId)
-                    .state(currentState)
+                    .state(currentState.name())
                     .build();
             }
 
             // A terminal state that is not the target means the deployment ended unexpectedly.
-            if (isTerminal(currentState) && !rTargetState.equals(currentState)) {
+            if (currentState.isTerminal()) {
                 throw new IllegalStateException(
                     "Deployment " + rDeployId + " reached state " + currentState + " but expected " + rTargetState
                 );
             }
 
+            // Check deadline before sleeping so we do not issue one extra HTTP call after expiry.
             if (Instant.now().isAfter(deadline)) {
                 throw new IllegalStateException(
                     "Timed out waiting for deployment " + rDeployId + " to reach " + rTargetState
@@ -153,13 +154,13 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
                 );
             }
 
-            Thread.sleep(rPollInterval.toMillis());
+            try {
+                Thread.sleep(rPollInterval.toMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            }
         }
-    }
-
-    /** OK, FAIL, and CANCELLED are terminal. WIP is the only in-progress state. */
-    private boolean isTerminal(String state) {
-        return "OK".equals(state) || "FAIL".equals(state) || "CANCELLED".equals(state);
     }
 
     @Builder

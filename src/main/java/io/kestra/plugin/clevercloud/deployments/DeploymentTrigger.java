@@ -1,8 +1,6 @@
 package io.kestra.plugin.clevercloud.deployments;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.github.scribejava.core.builder.ServiceBuilder;
-import com.github.scribejava.core.model.OAuth1AccessToken;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -14,22 +12,18 @@ import io.kestra.core.models.triggers.PollingTriggerInterface;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
-import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.clevercloud.CleverCloudApi;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.deployments.model.Deployment;
+import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-import okhttp3.OkHttpClient;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 @SuperBuilder
 @ToString
@@ -116,7 +110,7 @@ public class DeploymentTrigger extends AbstractTrigger
     @NotNull
     private Property<String> tokenSecret;
 
-    /** Overrides the Clever Cloud API base URL. Used in tests to point at a mock server. */
+    @Schema(title = "Override the Clever Cloud API base URL.", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
@@ -132,11 +126,27 @@ public class DeploymentTrigger extends AbstractTrigger
 
     @Schema(
         title = "Target deployment state that causes the trigger to fire.",
-        description = "Real state values: OK (successful deploy), FAIL (failed deploy), CANCELLED."
+        description = """
+            Accepts: OK (successful deploy), FAIL (failed deploy), CANCELLED.
+            The API returns deployments newest-first. Bursts of more than maxDeployments
+            deployments between two polls may be missed.
+            """
     )
     @PluginProperty(group = "main")
     @NotNull
-    private Property<String> targetState;
+    private Property<DeploymentState> targetState;
+
+    @Schema(
+        title = "Maximum number of deployments to fetch per poll.",
+        description = """
+            The API returns results newest-first. Increase this value if deployments may arrive
+            faster than the poll interval. Bursts beyond this limit between polls may be missed.
+            Defaults to 25.
+            """
+    )
+    @PluginProperty(group = "processing")
+    @Builder.Default
+    private Property<Integer> maxDeployments = Property.ofValue(25);
 
     @Schema(
         title = "How often to check for new deployments.",
@@ -162,23 +172,16 @@ public class DeploymentTrigger extends AbstractTrigger
         var rTokenSecret = runContext.render(tokenSecret).as(String.class).orElseThrow();
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rAppId = runContext.render(applicationId).as(String.class).orElseThrow();
-        var rTargetState = runContext.render(targetState).as(String.class).orElseThrow();
+        var rTargetState = runContext.render(targetState).as(DeploymentState.class).orElseThrow();
+        var rMaxDeployments = runContext.render(maxDeployments).as(Integer.class).orElse(25);
 
-        var service = new ServiceBuilder(rConsumerKey)
-            .apiSecret(rConsumerSecret)
-            .build(new CleverCloudApi());
-        var accessToken = new OAuth1AccessToken(rToken, rTokenSecret);
-        var client = new AbstractCleverCloudConnection.SignedClient(service, accessToken,
-            new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build());
+        var rBaseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
+        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret, rBaseUrl);
 
-        var baseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
-        var url = baseUrl
+        var url = rBaseUrl
             + "organisations/" + rOrgId
             + "/applications/" + rAppId
-            + "/deployments?limit=10";
+            + "/deployments?limit=" + rMaxDeployments;
 
         logger.debug("Polling deployments for application {}", rAppId);
         var body = client.get(url);
@@ -192,7 +195,7 @@ public class DeploymentTrigger extends AbstractTrigger
 
         var matched = deployments.stream()
             .filter(d -> "DEPLOY".equals(d.getAction()))
-            .filter(d -> rTargetState.equals(d.getState()))
+            .filter(d -> rTargetState.name().equals(d.getState()))
             .filter(d -> isAfterCutoff(d.getDate(), cutoff))
             .findFirst();
 

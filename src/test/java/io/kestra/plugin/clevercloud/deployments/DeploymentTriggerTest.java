@@ -9,6 +9,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.runners.RunContextInitializer;
+import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import jakarta.inject.Inject;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -57,7 +58,7 @@ class DeploymentTriggerTest {
             .tokenSecret(Property.ofValue("ts"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .targetState(Property.ofValue("OK"))
+            .targetState(Property.ofValue(DeploymentState.OK))
             .interval(Duration.ofMinutes(1))
             .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
             .build();
@@ -115,6 +116,8 @@ class DeploymentTriggerTest {
 
         assertThat(result.isPresent(), is(true));
         assertThat(result.get(), notNullValue());
+        // Exactly one HTTP request was made per evaluation cycle.
+        assertThat(mockServer.getRequestCount(), is(1));
     }
 
     @Test
@@ -235,5 +238,48 @@ class DeploymentTriggerTest {
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
         assertThat("UNDEPLOY records must not fire the trigger", result.isEmpty(), is(true));
+    }
+
+    @Test
+    void firesOnlyOnceWhenMultipleDeploymentsMatch() throws Exception {
+        // Two matching deployments: the trigger must fire exactly once (findFirst semantics)
+        // and must issue exactly one HTTP request per evaluation.
+        var lastPoll = ZonedDateTime.now().minusMinutes(10);
+        var epoch1 = Instant.now().minusSeconds(120).toEpochMilli();
+        var epoch2 = Instant.now().minusSeconds(60).toEpochMilli();
+
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {
+                    "uuid": "deployment_multi-006",
+                    "state": "OK",
+                    "commit": "aaa000",
+                    "date": "%d",
+                    "action": "DEPLOY",
+                    "cause": "Git"
+                  },
+                  {
+                    "uuid": "deployment_multi-007",
+                    "state": "OK",
+                    "commit": "bbb111",
+                    "date": "%d",
+                    "action": "DEPLOY",
+                    "cause": "Git"
+                  }
+                ]
+                """.formatted(epoch1, epoch2)));
+
+        var trigger = buildTrigger();
+        var trigCtx = triggerContext(lastPoll);
+        var condCtx = conditionContext(trigger, trigCtx);
+
+        Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
+
+        assertThat("trigger must fire when at least one deployment matches", result.isPresent(), is(true));
+        // Only one HTTP request per evaluation cycle regardless of how many deployments matched.
+        assertThat(mockServer.getRequestCount(), is(1));
     }
 }

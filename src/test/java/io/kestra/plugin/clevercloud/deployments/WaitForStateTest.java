@@ -3,6 +3,7 @@ package io.kestra.plugin.clevercloud.deployments;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import jakarta.inject.Inject;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.time.Duration;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -54,7 +56,7 @@ class WaitForStateTest {
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d1"))
-            .targetState(Property.ofValue("OK"))
+            .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
             .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
@@ -86,7 +88,7 @@ class WaitForStateTest {
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d2"))
-            .targetState(Property.ofValue("OK"))
+            .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
             .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
@@ -117,7 +119,7 @@ class WaitForStateTest {
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d5"))
-            .targetState(Property.ofValue("OK"))
+            .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
             .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
@@ -154,7 +156,7 @@ class WaitForStateTest {
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d3"))
-            .targetState(Property.ofValue("OK"))
+            .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(50)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
             .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
@@ -188,7 +190,7 @@ class WaitForStateTest {
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d4"))
-            .targetState(Property.ofValue("OK"))
+            .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofMillis(50)))
             .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
@@ -197,5 +199,36 @@ class WaitForStateTest {
         var runContext = runContextFactory.of();
         var ex = assertThrows(IllegalStateException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("Timed out"));
+    }
+
+    @Test
+    void throwsCleanIoExceptionOn500WithoutBodyLeak() {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(500)
+            .addHeader("Content-Type", "application/json")
+            .setBody("{\"error\":\"super-secret-internal-error\",\"token\":\"leaked-value\"}"));
+
+        var task = WaitForState.builder()
+            .id("wait-500-test")
+            .type(WaitForState.class.getName())
+            .consumerKey(Property.ofValue("ck"))
+            .consumerSecret(Property.ofValue("cs"))
+            .token(Property.ofValue("tk"))
+            .tokenSecret(Property.ofValue("ts"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_test"))
+            .deploymentId(Property.ofValue("deployment_d6"))
+            .targetState(Property.ofValue(DeploymentState.OK))
+            .pollInterval(Property.ofValue(Duration.ofMillis(10)))
+            .timeout(Property.ofValue(Duration.ofSeconds(5)))
+            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        var ex = assertThrows(IOException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("500"));
+        // The raw API response body must not appear in the exception message.
+        assertThat(ex.getMessage(), not(containsString("super-secret-internal-error")));
+        assertThat(ex.getMessage(), not(containsString("leaked-value")));
     }
 }

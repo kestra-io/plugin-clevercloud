@@ -65,10 +65,11 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
 
     @Schema(
         title = "Maximum number of deployments to return.",
-        description = "When not set, the API default applies (typically 20)."
+        description = "Defaults to 50. Set to a higher value to retrieve more history."
     )
     @PluginProperty(group = "processing")
-    private Property<Integer> limit;
+    @Builder.Default
+    private Property<Integer> limit = Property.ofValue(50);
 
     @Override
     public Output run(RunContext runContext) throws Exception {

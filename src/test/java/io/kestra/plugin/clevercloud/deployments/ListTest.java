@@ -10,8 +10,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
 class ListTest {
@@ -85,7 +88,33 @@ class ListTest {
     }
 
     @Test
-    void applyLimitParameter() throws Exception {
+    void appliesDefaultLimitParameter() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = List.builder()
+            .id("list-default-limit-test")
+            .type(List.class.getName())
+            .consumerKey(Property.ofValue("ck"))
+            .consumerSecret(Property.ofValue("cs"))
+            .token(Property.ofValue("tk"))
+            .tokenSecret(Property.ofValue("ts"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("limit=50"));
+    }
+
+    @Test
+    void applyCustomLimitParameter() throws Exception {
         mockServer.enqueue(new MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
@@ -135,5 +164,32 @@ class ListTest {
 
         assertThat(output.getTotal(), is(0));
         assertThat(output.getDeployments(), is(empty()));
+    }
+
+    @Test
+    void throwsCleanIoExceptionOn500WithoutBodyLeak() {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(500)
+            .addHeader("Content-Type", "application/json")
+            .setBody("{\"error\":\"super-secret-internal-error\",\"token\":\"leaked-value\"}"));
+
+        var task = List.builder()
+            .id("list-500-test")
+            .type(List.class.getName())
+            .consumerKey(Property.ofValue("ck"))
+            .consumerSecret(Property.ofValue("cs"))
+            .token(Property.ofValue("tk"))
+            .tokenSecret(Property.ofValue("ts"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        var ex = assertThrows(IOException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("500"));
+        // The raw API response body must not appear in the exception message.
+        assertThat(ex.getMessage(), not(containsString("super-secret-internal-error")));
+        assertThat(ex.getMessage(), not(containsString("leaked-value")));
     }
 }

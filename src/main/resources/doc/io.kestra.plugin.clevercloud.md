@@ -36,7 +36,7 @@ Tasks for listing, fetching, and waiting on application deployments.
 
 **`io.kestra.plugin.clevercloud.deployments.List`**
 
-Lists the deployment history for an application. Required: `organisationId`, `applicationId`. Optional: `limit` (integer, caps the number of deployments returned). Outputs: `deployments` (list of deployment objects), `total` (count).
+Lists the deployment history for an application. Required: `organisationId`, `applicationId`. Optional: `limit` (integer, caps the number of deployments returned, defaults to 50). Outputs: `deployments` (list of deployment objects), `total` (count).
 
 Each deployment object exposes: `uuid`, `state`, `action`, `cause`, `date` (epoch milliseconds string), `commit` (null for non-Git triggers).
 
@@ -46,7 +46,7 @@ Fetches a single deployment by ID. Required: `organisationId`, `applicationId`, 
 
 **`io.kestra.plugin.clevercloud.deployments.WaitForState`**
 
-Polls a deployment until it reaches the configured `targetState`. Throws when the deployment reaches a different terminal state or when `timeout` elapses. Required: `organisationId`, `applicationId`, `deploymentId`, `targetState`. Optional: `pollInterval` (default PT15S), `timeout` (default PT30M). Outputs: `deploymentId`, `state`.
+Polls a deployment until it reaches the configured `targetState`. Throws when the deployment reaches a different terminal state or when `timeout` elapses. Required: `organisationId`, `applicationId`, `deploymentId`, `targetState` (enum: OK, FAIL, CANCELLED, WIP). Optional: `pollInterval` (default PT15S), `timeout` (default PT30M). Outputs: `deploymentId`, `state`.
 
 Use `targetState: OK` to wait for a successful deploy.
 
@@ -54,7 +54,7 @@ Use `targetState: OK` to wait for a successful deploy.
 
 **`io.kestra.plugin.clevercloud.deployments.DeploymentTrigger`**
 
-Polls the deployment list for an application at each `interval` and fires when any DEPLOY action deployment matches `targetState`. Only the most recent ten deployments are checked per poll. UNDEPLOY records are ignored. Outputs accessible via `{{ trigger.* }}`: `deploymentId`, `state`, `commit`.
+Polls the deployment list for an application at each `interval` and fires when any DEPLOY action deployment matches `targetState` (enum: OK, FAIL, CANCELLED, WIP). UNDEPLOY records are ignored. The number of deployments checked per poll is controlled by `maxDeployments` (default 25). Outputs accessible via `{{ trigger.* }}`: `deploymentId`, `state`, `commit`.
 
 The minimum recommended `interval` is PT30S to avoid rate-limiting the Clever Cloud API.
 
