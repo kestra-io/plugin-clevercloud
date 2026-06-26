@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Trigger when a member is added or removed from a Clever Cloud organisation.",
+    title = "Trigger when a member is added or removed from a Clever Cloud organisation",
     description = """
         Polls the member list of the given organisation at each interval and fires when the
         member set changes relative to the previous evaluation.
@@ -83,7 +83,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     implements PollingTriggerInterface, TriggerOutput<MemberChangeTrigger.Output> {
 
     @Schema(
-        title = "OAuth consumer key.",
+        title = "OAuth consumer key",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -91,7 +91,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     private Property<String> consumerKey;
 
     @Schema(
-        title = "OAuth consumer secret.",
+        title = "OAuth consumer secret",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -99,7 +99,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     private Property<String> consumerSecret;
 
     @Schema(
-        title = "OAuth access token.",
+        title = "OAuth access token",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -107,14 +107,14 @@ public class MemberChangeTrigger extends AbstractTrigger
     private Property<String> token;
 
     @Schema(
-        title = "OAuth access token secret.",
+        title = "OAuth access token secret",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
     )
     @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> tokenSecret;
 
-    @Schema(title = "Override the Clever Cloud API base URL.", description = "Used in tests to point at a mock server. Do not set in production flows.")
+    @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
@@ -124,7 +124,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     private Property<String> organisationId;
 
     @Schema(
-        title = "Which membership event fires the trigger.",
+        title = "Which membership event fires the trigger",
         description = """
             MEMBER_ADDED fires when a new member appears in the list.
             MEMBER_REMOVED fires when a member disappears from the list.
@@ -137,7 +137,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     private Property<MemberEvent> event = Property.of(MemberEvent.MEMBER_CHANGED);
 
     @Schema(
-        title = "How often to check for membership changes.",
+        title = "How often to check for membership changes",
         description = "ISO-8601 duration. Defaults to PT1M."
     )
     @PluginProperty(group = "reliability")

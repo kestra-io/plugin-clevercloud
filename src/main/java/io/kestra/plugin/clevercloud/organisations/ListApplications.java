@@ -23,7 +23,7 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "List applications in a Clever Cloud organisation.",
+    title = "List applications in a Clever Cloud organisation",
     description = """
         Returns all applications deployed in the given organisation.
         Each entry includes the application ID, name, description, zone, and instance type.

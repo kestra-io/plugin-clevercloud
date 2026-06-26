@@ -23,7 +23,7 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "List members of a Clever Cloud organisation.",
+    title = "List members of a Clever Cloud organisation",
     description = """
         Returns all members of the given organisation with their role and job title.
         Each entry contains a user info object (id, email, name, avatar) along with

@@ -23,7 +23,7 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "List add-ons in a Clever Cloud organisation.",
+    title = "List add-ons in a Clever Cloud organisation",
     description = """
         Returns all add-ons provisioned in the given organisation.
         Each entry includes the add-on ID, name, region, provider info, and plan.

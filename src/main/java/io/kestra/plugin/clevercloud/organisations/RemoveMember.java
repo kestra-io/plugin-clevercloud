@@ -19,7 +19,7 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Remove a member from a Clever Cloud organisation.",
+    title = "Remove a member from a Clever Cloud organisation",
     description = """
         Removes the specified user from the organisation. The user ID can be obtained
         from the ListMembers task (member.id field).
@@ -55,7 +55,7 @@ public class RemoveMember extends AbstractCleverCloudConnection implements Runna
     private Property<String> organisationId;
 
     @Schema(
-        title = "User ID of the member to remove.",
+        title = "User ID of the member to remove",
         description = "Obtain this from the ListMembers task: {{ outputs.list.members[0].member.id }}."
     )
     @PluginProperty(group = "main")

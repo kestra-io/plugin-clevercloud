@@ -19,7 +19,7 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Get details of a Clever Cloud organisation.",
+    title = "Get details of a Clever Cloud organisation",
     description = """
         Retrieves the organisation record for a given ID.
 

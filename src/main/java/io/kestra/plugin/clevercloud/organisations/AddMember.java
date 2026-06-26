@@ -22,7 +22,7 @@ import java.util.Map;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Add a member to a Clever Cloud organisation.",
+    title = "Add a member to a Clever Cloud organisation",
     description = """
         Invites a user to the organisation by email and assigns them a role.
 
@@ -61,7 +61,7 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
     private Property<String> organisationId;
 
     @Schema(
-        title = "Email address of the user to add.",
+        title = "Email address of the user to add",
         description = "The user will be invited to the organisation at this address."
     )
     @PluginProperty(group = "main")
@@ -69,7 +69,7 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
     private Property<String> email;
 
     @Schema(
-        title = "Role to assign to the new member.",
+        title = "Role to assign to the new member",
         description = """
             Accepts: ADMIN (full control), MANAGER, DEVELOPER (can deploy),
             ACCOUNTING, READ_ONLY (view-only access).
