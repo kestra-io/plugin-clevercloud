@@ -22,7 +22,7 @@ import java.util.ArrayList;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "List deployments for a Clever Cloud application.",
+    title = "List deployments for a Clever Cloud application",
     description = """
         Retrieves the deployment history for a given application within an organisation.
         Returns a list of deployment objects and the total count.
@@ -64,7 +64,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
     private Property<String> applicationId;
 
     @Schema(
-        title = "Maximum number of deployments to return.",
+        title = "Maximum number of deployments to return",
         description = "Defaults to 50. Set to a higher value to retrieve more history."
     )
     @PluginProperty(group = "processing")

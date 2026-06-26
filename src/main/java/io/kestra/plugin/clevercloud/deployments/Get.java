@@ -19,7 +19,7 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Get details of a specific Clever Cloud deployment.",
+    title = "Get details of a specific Clever Cloud deployment",
     description = """
         Retrieves a single deployment by its ID. Returns the deployment state, action,
         cause, date (epoch milliseconds), and the git commit SHA when available.
@@ -102,7 +102,7 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         private final String deploymentId;
 
         @Schema(
-            title = "Current state of the deployment.",
+            title = "Current state of the deployment",
             description = "WIP means in-progress. Terminal states: OK (success), FAIL (error), CANCELLED."
         )
         private final String state;
@@ -116,7 +116,7 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         @Schema(title = "Deployment timestamp as epoch milliseconds string")
         private final String date;
 
-        @Schema(title = "Git commit SHA associated with this deployment. Null for non-Git deploys.")
+        @Schema(title = "Git commit SHA associated with this deployment, null for non-Git deploys")
         private final String commit;
     }
 }

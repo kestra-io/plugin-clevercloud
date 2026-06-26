@@ -51,7 +51,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
      * Overrides the Clever Cloud API base URL. Used in tests to point at a mock server.
      * Hidden from the UI and docs; should not be set in production flows.
      */
-    @Schema(title = "Override the Clever Cloud API base URL.", description = "Used in tests to point at a mock server. Do not set in production flows.")
+    @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
@@ -60,7 +60,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
     }
 
     @Schema(
-        title = "OAuth consumer key.",
+        title = "OAuth consumer key",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -68,7 +68,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
     private Property<String> consumerKey;
 
     @Schema(
-        title = "OAuth consumer secret.",
+        title = "OAuth consumer secret",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -76,7 +76,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
     private Property<String> consumerSecret;
 
     @Schema(
-        title = "OAuth access token.",
+        title = "OAuth access token",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -84,7 +84,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
     private Property<String> token;
 
     @Schema(
-        title = "OAuth access token secret.",
+        title = "OAuth access token secret",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
     )
     @PluginProperty(group = "connection", secret = true)

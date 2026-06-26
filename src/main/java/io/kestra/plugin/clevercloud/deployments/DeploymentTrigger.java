@@ -31,7 +31,7 @@ import java.util.Optional;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Trigger when a Clever Cloud application deployment reaches a target state.",
+    title = "Trigger when a Clever Cloud application deployment reaches a target state",
     description = """
         Polls the deployment list for a given application at each interval.
         Fires an execution when a DEPLOY action deployment transitions to the configured target state.
@@ -79,7 +79,7 @@ public class DeploymentTrigger extends AbstractTrigger
     implements PollingTriggerInterface, TriggerOutput<DeploymentTrigger.Output> {
 
     @Schema(
-        title = "OAuth consumer key.",
+        title = "OAuth consumer key",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -87,7 +87,7 @@ public class DeploymentTrigger extends AbstractTrigger
     private Property<String> consumerKey;
 
     @Schema(
-        title = "OAuth consumer secret.",
+        title = "OAuth consumer secret",
         description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -95,7 +95,7 @@ public class DeploymentTrigger extends AbstractTrigger
     private Property<String> consumerSecret;
 
     @Schema(
-        title = "OAuth access token.",
+        title = "OAuth access token",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
     )
     @PluginProperty(group = "connection", secret = true)
@@ -103,14 +103,14 @@ public class DeploymentTrigger extends AbstractTrigger
     private Property<String> token;
 
     @Schema(
-        title = "OAuth access token secret.",
+        title = "OAuth access token secret",
         description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
     )
     @PluginProperty(group = "connection", secret = true)
     @NotNull
     private Property<String> tokenSecret;
 
-    @Schema(title = "Override the Clever Cloud API base URL.", description = "Used in tests to point at a mock server. Do not set in production flows.")
+    @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
@@ -125,7 +125,7 @@ public class DeploymentTrigger extends AbstractTrigger
     private Property<String> applicationId;
 
     @Schema(
-        title = "Target deployment state that causes the trigger to fire.",
+        title = "Target deployment state that causes the trigger to fire",
         description = """
             Accepts: OK (successful deploy), FAIL (failed deploy), CANCELLED.
             The API returns deployments newest-first. Bursts of more than maxDeployments
@@ -137,7 +137,7 @@ public class DeploymentTrigger extends AbstractTrigger
     private Property<DeploymentState> targetState;
 
     @Schema(
-        title = "Maximum number of deployments to fetch per poll.",
+        title = "Maximum number of deployments to fetch per poll",
         description = """
             The API returns results newest-first. Increase this value if deployments may arrive
             faster than the poll interval. Bursts beyond this limit between polls may be missed.
@@ -149,7 +149,7 @@ public class DeploymentTrigger extends AbstractTrigger
     private Property<Integer> maxDeployments = Property.ofValue(25);
 
     @Schema(
-        title = "How often to check for new deployments.",
+        title = "How often to check for new deployments",
         description = "ISO-8601 duration. Minimum PT30S is recommended to avoid overloading the API. Defaults to PT1M."
     )
     @PluginProperty(group = "reliability")

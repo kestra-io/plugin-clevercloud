@@ -23,7 +23,7 @@ import java.time.Instant;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Wait for a Clever Cloud deployment to reach a target state.",
+    title = "Wait for a Clever Cloud deployment to reach a target state",
     description = """
         Polls a deployment at a configurable interval until it reaches one of the terminal
         states (OK, FAIL, CANCELLED) or the specified target state.
@@ -77,7 +77,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     private Property<String> deploymentId;
 
     @Schema(
-        title = "Target state to wait for.",
+        title = "Target state to wait for",
         description = """
             Accepts: OK (deployment succeeded), FAIL (deployment errored), CANCELLED (deployment cancelled),
             WIP (still in progress, not a terminal state).
@@ -89,7 +89,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     private Property<DeploymentState> targetState;
 
     @Schema(
-        title = "How often to poll the deployment status.",
+        title = "How often to poll the deployment status",
         description = "ISO-8601 duration, e.g. PT10S for 10 seconds. Defaults to 15 seconds."
     )
     @PluginProperty(group = "reliability")
@@ -97,7 +97,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     private Property<Duration> pollInterval = Property.ofValue(Duration.ofSeconds(15));
 
     @Schema(
-        title = "Maximum time to wait before aborting.",
+        title = "Maximum time to wait before aborting",
         description = "ISO-8601 duration, e.g. PT10M for 10 minutes. Defaults to 30 minutes."
     )
     @PluginProperty(group = "reliability")
