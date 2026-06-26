@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
+import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -80,7 +81,7 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
     public static class Output implements io.kestra.core.models.tasks.Output {
 
         @Schema(title = "List of add-ons in the organisation")
-        private final java.util.List<Addon> addons;
+        private final List<Addon> addons;
 
         @Schema(title = "Total number of add-ons returned")
         private final int total;

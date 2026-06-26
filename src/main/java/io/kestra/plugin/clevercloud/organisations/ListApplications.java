@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
+import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -80,7 +81,7 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
     public static class Output implements io.kestra.core.models.tasks.Output {
 
         @Schema(title = "List of applications in the organisation")
-        private final java.util.List<Application> applications;
+        private final List<Application> applications;
 
         @Schema(title = "Total number of applications returned")
         private final int total;

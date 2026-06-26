@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
+import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -81,7 +82,7 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
     public static class Output implements io.kestra.core.models.tasks.Output {
 
         @Schema(title = "List of organisation members")
-        private final java.util.List<Member> members;
+        private final List<Member> members;
 
         @Schema(title = "Total number of members returned")
         private final int total;

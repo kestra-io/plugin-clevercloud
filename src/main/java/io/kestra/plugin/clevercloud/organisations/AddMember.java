@@ -14,6 +14,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.Map;
+
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -87,7 +89,7 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
         var rRole = runContext.render(role).as(OrgRole.class).orElseThrow();
 
         var url = baseUrl(runContext) + "organisations/" + rOrgId + "/members";
-        var jsonBody = MAPPER.writeValueAsString(java.util.Map.of("email", rEmail, "role", rRole.name()));
+        var jsonBody = MAPPER.writeValueAsString(Map.of("email", rEmail, "role", rRole.name()));
 
         logger.info("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);
         client.post(url, jsonBody);

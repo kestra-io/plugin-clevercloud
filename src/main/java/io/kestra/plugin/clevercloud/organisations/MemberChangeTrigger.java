@@ -162,7 +162,7 @@ public class MemberChangeTrigger extends AbstractTrigger
         var rEvent = runContext.render(event).as(MemberEvent.class).orElse(MemberEvent.MEMBER_CHANGED);
 
         var rBaseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
-        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret, rBaseUrl);
+        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret);
 
         var url = rBaseUrl + "organisations/" + rOrgId + "/members";
 
