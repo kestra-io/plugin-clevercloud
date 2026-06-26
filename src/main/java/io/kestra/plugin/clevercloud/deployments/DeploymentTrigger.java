@@ -176,7 +176,7 @@ public class DeploymentTrigger extends AbstractTrigger
         var rMaxDeployments = runContext.render(maxDeployments).as(Integer.class).orElse(25);
 
         var rBaseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
-        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret, rBaseUrl);
+        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret);
 
         var url = rBaseUrl
             + "organisations/" + rOrgId

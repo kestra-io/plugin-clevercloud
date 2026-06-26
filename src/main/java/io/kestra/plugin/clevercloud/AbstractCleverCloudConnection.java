@@ -102,20 +102,19 @@ public abstract class AbstractCleverCloudConnection extends Task {
         var rConsumerSecret = runContext.render(consumerSecret).as(String.class).orElseThrow();
         var rToken = runContext.render(token).as(String.class).orElseThrow();
         var rTokenSecret = runContext.render(tokenSecret).as(String.class).orElseThrow();
-        return signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret, null);
+        return signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret);
     }
 
     /**
      * Builds a {@link SignedClient} from already-rendered credential strings.
      * Triggers call this directly because they hold their own credential properties and
-     * do not extend this class. Pass {@code null} for baseUrl to use the production URL.
+     * do not extend this class.
      */
     public static SignedClient signedClient(
         String consumerKey,
         String consumerSecret,
         String token,
-        String tokenSecret,
-        String baseUrl
+        String tokenSecret
     ) {
         var service = new ServiceBuilder(consumerKey)
             .apiSecret(consumerSecret)
@@ -162,7 +161,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
                     LOG.debug("Clever Cloud API GET {} returned {}: {}", url, response.code(), body);
                     throw new IOException(
                         "Clever Cloud API error " + response.code() + " on GET " + url
-                            + " — check credentials and that the resource exists"
+                            + ": check credentials and that the resource exists"
                     );
                 }
                 return body;
@@ -191,7 +190,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
                     LOG.debug("Clever Cloud API POST {} returned {}: {}", url, response.code(), body);
                     throw new IOException(
                         "Clever Cloud API error " + response.code() + " on POST " + url
-                            + " — check credentials and request body"
+                            + ": check credentials and request body"
                     );
                 }
                 return body;
@@ -219,7 +218,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
                     LOG.debug("Clever Cloud API DELETE {} returned {}: {}", url, response.code(), body);
                     throw new IOException(
                         "Clever Cloud API error " + response.code() + " on DELETE " + url
-                            + " — check credentials and that the resource exists"
+                            + ": check credentials and that the resource exists"
                     );
                 }
                 return body;

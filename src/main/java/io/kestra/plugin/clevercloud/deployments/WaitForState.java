@@ -127,22 +127,32 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         while (true) {
             var body = client.get(url);
             var deployment = MAPPER.readValue(body, Deployment.class);
-            var currentState = DeploymentState.valueOf(deployment.getState());
+            var rawState = deployment.getState();
 
-            logger.debug("Deployment {} state: {}", rDeployId, currentState);
+            logger.debug("Deployment {} state: {}", rDeployId, rawState);
 
-            if (rTargetState == currentState) {
-                logger.info("Deployment {} reached target state {}", rDeployId, currentState);
+            if (rTargetState.name().equals(rawState)) {
+                logger.info("Deployment {} reached target state {}", rDeployId, rawState);
                 return Output.builder()
                     .deploymentId(rDeployId)
-                    .state(currentState.name())
+                    .state(rawState)
                     .build();
             }
 
-            // A terminal state that is not the target means the deployment ended unexpectedly.
-            if (currentState.isTerminal()) {
+            // Resolve the known enum to check terminality. An unrecognised state is treated as
+            // non-terminal so we keep polling rather than throwing on unexpected API values.
+            DeploymentState knownState;
+            try {
+                knownState = DeploymentState.valueOf(rawState);
+            } catch (IllegalArgumentException e) {
+                logger.warn("Deployment {} returned unrecognised state '{}', continuing to poll", rDeployId, rawState);
+                knownState = null;
+            }
+
+            // A known terminal state that is not the target means the deployment ended unexpectedly.
+            if (knownState != null && knownState.isTerminal()) {
                 throw new IllegalStateException(
-                    "Deployment " + rDeployId + " reached state " + currentState + " but expected " + rTargetState
+                    "Deployment " + rDeployId + " reached state " + rawState + " but expected " + rTargetState
                 );
             }
 
@@ -150,7 +160,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
             if (Instant.now().isAfter(deadline)) {
                 throw new IllegalStateException(
                     "Timed out waiting for deployment " + rDeployId + " to reach " + rTargetState
-                        + " after " + rTimeout + ". Last state: " + currentState
+                        + " after " + rTimeout + ". Last state: " + rawState
                 );
             }
 
