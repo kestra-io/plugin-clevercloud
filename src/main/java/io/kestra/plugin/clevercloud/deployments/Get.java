@@ -38,8 +38,6 @@ import lombok.experimental.SuperBuilder;
                 tasks:
                   - id: get
                     type: io.kestra.plugin.clevercloud.deployments.Get
-                    consumerKey: "{{ secret('CC_CONSUMER_KEY') }}"
-                    consumerSecret: "{{ secret('CC_CONSUMER_SECRET') }}"
                     token: "{{ secret('CC_TOKEN') }}"
                     tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

@@ -58,8 +58,6 @@ import java.util.Optional;
                 triggers:
                   - id: watch_deploy
                     type: io.kestra.plugin.clevercloud.deployments.DeploymentTrigger
-                    consumerKey: "{{ secret('CC_CONSUMER_KEY') }}"
-                    consumerSecret: "{{ secret('CC_CONSUMER_SECRET') }}"
                     token: "{{ secret('CC_TOKEN') }}"
                     tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -80,19 +78,27 @@ public class DeploymentTrigger extends AbstractTrigger
 
     @Schema(
         title = "OAuth consumer key",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
+        description = """
+            Defaults to the public clever-tools consumer key baked into the open-source Clever Cloud CLI.
+            Only override if you registered your own OAuth consumer application.
+            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}.
+            """
     )
     @PluginProperty(group = "connection", secret = true)
-    @NotNull
-    private Property<String> consumerKey;
+    @Builder.Default
+    private Property<String> consumerKey = Property.ofValue("T5nFjKeHH4AIlEveuGhB5S3xg8T19e");
 
     @Schema(
         title = "OAuth consumer secret",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
+        description = """
+            Defaults to the public clever-tools consumer secret baked into the open-source Clever Cloud CLI.
+            Only override if you registered your own OAuth consumer application.
+            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}.
+            """
     )
     @PluginProperty(group = "connection", secret = true)
-    @NotNull
-    private Property<String> consumerSecret;
+    @Builder.Default
+    private Property<String> consumerSecret = Property.ofValue("MgVMqTr6fWlf2M0tkC2MXOnhfqBWDT");
 
     @Schema(
         title = "OAuth access token",

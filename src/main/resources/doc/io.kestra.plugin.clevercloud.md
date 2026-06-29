@@ -4,18 +4,20 @@ This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/)
 
 ## Authentication
 
-All tasks and triggers require four OAuth 1.0a credentials. These map to the following properties on every component:
+All tasks and triggers use OAuth 1.0a. Only two credentials are required for most users:
 
-| Property | Description | Secret |
-|---|---|---|
-| `consumerKey` | OAuth consumer key | yes |
-| `consumerSecret` | OAuth consumer secret | yes |
-| `token` | OAuth access token | yes |
-| `tokenSecret` | OAuth access token secret | yes |
+| Property | Required | Description | Secret |
+|---|---|---|---|
+| `token` | yes | OAuth access token | yes |
+| `tokenSecret` | yes | OAuth access token secret | yes |
+| `consumerKey` | no | OAuth consumer key (defaults to the public clever-tools value) | yes |
+| `consumerSecret` | no | OAuth consumer secret (defaults to the public clever-tools value) | yes |
 
-Store all four values as [Kestra secrets](https://kestra.io/docs/concepts/secret) and reference them with `{{ secret('NAME') }}`. You can set them once using [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults) to avoid repeating them in every task.
+`consumerKey` and `consumerSecret` default to the public credentials baked into the open-source [clever-tools CLI](https://github.com/CleverCloud/clever-tools). These are the same values every `clever login` session uses. Only override them if you registered your own OAuth consumer application in the Clever Cloud console.
 
-You can generate an access token from the Clever Cloud console under **Profile > API tokens** or via the `clever` CLI (`clever login`).
+Store `token` and `tokenSecret` as [Kestra secrets](https://kestra.io/docs/concepts/secret) and reference them with `{{ secret('NAME') }}`. You can set them once using [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults) to avoid repeating them in every task.
+
+Generate an access token via the `clever` CLI (`clever login`) or from the Clever Cloud console under **Profile > API tokens**.
 
 ## Deployment states
 

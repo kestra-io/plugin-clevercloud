@@ -61,19 +61,27 @@ public abstract class AbstractCleverCloudConnection extends Task {
 
     @Schema(
         title = "OAuth consumer key",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}."
+        description = """
+            Defaults to the public clever-tools consumer key baked into the open-source Clever Cloud CLI.
+            Only override if you registered your own OAuth consumer application.
+            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}.
+            """
     )
     @PluginProperty(group = "connection", secret = true)
-    @NotNull
-    private Property<String> consumerKey;
+    @Builder.Default
+    private Property<String> consumerKey = Property.ofValue("T5nFjKeHH4AIlEveuGhB5S3xg8T19e");
 
     @Schema(
         title = "OAuth consumer secret",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}."
+        description = """
+            Defaults to the public clever-tools consumer secret baked into the open-source Clever Cloud CLI.
+            Only override if you registered your own OAuth consumer application.
+            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}.
+            """
     )
     @PluginProperty(group = "connection", secret = true)
-    @NotNull
-    private Property<String> consumerSecret;
+    @Builder.Default
+    private Property<String> consumerSecret = Property.ofValue("MgVMqTr6fWlf2M0tkC2MXOnhfqBWDT");
 
     @Schema(
         title = "OAuth access token",
