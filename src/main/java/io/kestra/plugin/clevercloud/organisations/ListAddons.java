@@ -10,8 +10,11 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Addon;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
@@ -23,9 +26,10 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "List add-ons in a Clever Cloud organisation",
+    title = "List add-ons in a Clever Cloud organisation or personal account",
     description = """
-        Returns all add-ons provisioned in the given organisation.
+        Returns all add-ons provisioned in the given organisation or personal account.
+        When organisationId is omitted, lists add-ons under the personal account via /self.
         Each entry includes the add-on ID, name, region, provider info, and plan.
         """
 )
@@ -41,30 +45,43 @@ import java.util.List;
                 tasks:
                   - id: list
                     type: io.kestra.plugin.clevercloud.organisations.ListAddons
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                """
+        ),
+        @Example(
+            title = "List all add-ons for a personal account",
+            full = true,
+            code = """
+                id: list_personal_addons
+                namespace: company.team
+
+                tasks:
+                  - id: list
+                    type: io.kestra.plugin.clevercloud.organisations.ListAddons
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                 """
         )
     }
 )
 public class ListAddons extends AbstractCleverCloudConnection implements RunnableTask<ListAddons.Output> {
 
-    @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal accounts)")
+    @Schema(
+        title = "Organisation ID",
+        description = "When omitted, the personal account endpoint (/self) is used instead."
+    )
     @PluginProperty(group = "main")
-    @NotNull
     private Property<String> organisationId;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var client = signedClient(runContext);
 
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
-        var url = baseUrl(runContext) + "organisations/" + rOrgId + "/addons";
+        var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
+        var url = baseUrl(runContext) + "/" + resourceBase(rOrgId) + "/addons";
 
-        logger.info("Listing add-ons for organisation {}", rOrgId);
-        var body = client.get(url);
+        logger.info("Listing add-ons for {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
+        var body = makeCall(runContext, buildGetRequest(url));
         var addons = MAPPER.readValue(body, new TypeReference<ArrayList<Addon>>() {});
 
         logger.info("Found {} add-on(s)", addons.size());
@@ -78,7 +95,7 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "List of add-ons in the organisation")
+        @Schema(title = "List of add-ons in the organisation or personal account")
         private final List<Addon> addons;
 
         @Schema(title = "Total number of add-ons returned")

@@ -40,13 +40,10 @@ class RemoveMemberTest {
         var task = RemoveMember.builder()
             .id("remove-member-test")
             .type(RemoveMember.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .userId(Property.of("user_abc-001"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .userId(Property.ofValue("user_abc-001"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -58,6 +55,26 @@ class RemoveMemberTest {
     }
 
     @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse().setResponseCode(200).setBody(""));
+
+        var task = RemoveMember.builder()
+            .id("remove-member-auth-test")
+            .type(RemoveMember.class.getName())
+            .apiToken(Property.ofValue("my-secret-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .userId(Property.ofValue("user_abc-001"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+    }
+
+    @Test
     void handlesNoContentResponse() throws Exception {
         // Some API versions return 204 No Content.
         mockServer.enqueue(new MockResponse().setResponseCode(204));
@@ -65,13 +82,10 @@ class RemoveMemberTest {
         var task = RemoveMember.builder()
             .id("remove-204-test")
             .type(RemoveMember.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .userId(Property.of("user_def-002"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .userId(Property.ofValue("user_def-002"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();

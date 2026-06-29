@@ -11,7 +11,11 @@ import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
@@ -28,6 +32,7 @@ import java.util.List;
         Returns all members of the given organisation with their role and job title.
         Each entry contains a user info object (id, email, name, avatar) along with
         the role assigned within this organisation.
+        The /self/members endpoint does not exist on the Clever Cloud API, so organisationId is required.
         """
 )
 @Plugin(
@@ -42,8 +47,7 @@ import java.util.List;
                 tasks:
                   - id: list
                     type: io.kestra.plugin.clevercloud.organisations.ListMembers
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 """
         )
@@ -51,7 +55,10 @@ import java.util.List;
 )
 public class ListMembers extends AbstractCleverCloudConnection implements RunnableTask<ListMembers.Output> {
 
-    @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal accounts)")
+    @Schema(
+        title = "Organisation ID",
+        description = "Required. The /self/members endpoint does not exist on the Clever Cloud API."
+    )
     @PluginProperty(group = "main")
     @NotNull
     private Property<String> organisationId;
@@ -59,13 +66,14 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var client = signedClient(runContext);
 
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
-        var url = baseUrl(runContext) + "organisations/" + rOrgId + "/members";
+        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("organisationId is required for ListMembers: /self/members does not exist")
+        );
+        var url = baseUrl(runContext) + "/organisations/" + rOrgId + "/members";
 
         logger.info("Listing members for organisation {}", rOrgId);
-        var body = client.get(url);
+        var body = makeCall(runContext, buildGetRequest(url));
         var members = MAPPER.readValue(body, new TypeReference<ArrayList<Member>>() {});
 
         logger.info("Found {} member(s)", members.size());

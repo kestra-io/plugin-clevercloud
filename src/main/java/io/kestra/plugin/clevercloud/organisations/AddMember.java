@@ -11,7 +11,10 @@ import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.OrgRole;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
@@ -28,6 +31,7 @@ import java.util.Map;
 
         Valid roles: ADMIN, MANAGER, DEVELOPER, ACCOUNTING, READ_ONLY.
         The user receives an email invitation if they do not already have a Clever Cloud account.
+        organisationId is required: the /self/members endpoint does not exist.
         """
 )
 @Plugin(
@@ -42,8 +46,7 @@ import java.util.Map;
                 tasks:
                   - id: add
                     type: io.kestra.plugin.clevercloud.organisations.AddMember
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     email: "developer@example.com"
                     role: DEVELOPER
@@ -53,7 +56,10 @@ import java.util.Map;
 )
 public class AddMember extends AbstractCleverCloudConnection implements RunnableTask<VoidOutput> {
 
-    @Schema(title = "Organisation ID (orga_xxx)")
+    @Schema(
+        title = "Organisation ID",
+        description = "Required. The /self/members endpoint does not exist on the Clever Cloud API."
+    )
     @PluginProperty(group = "main")
     @NotNull
     private Property<String> organisationId;
@@ -80,17 +86,16 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
     @Override
     public VoidOutput run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var client = signedClient(runContext);
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rEmail = runContext.render(email).as(String.class).orElseThrow();
         var rRole = runContext.render(role).as(OrgRole.class).orElseThrow();
 
-        var url = baseUrl(runContext) + "organisations/" + rOrgId + "/members";
-        var jsonBody = MAPPER.writeValueAsString(Map.of("email", rEmail, "role", rRole.name()));
+        var url = baseUrl(runContext) + "/organisations/" + rOrgId + "/members";
+        var body = Map.of("email", rEmail, "role", rRole.name());
 
         logger.info("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);
-        client.post(url, jsonBody);
+        makeCall(runContext, buildPostRequest(url, body));
 
         return null;
     }

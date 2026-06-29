@@ -12,13 +12,13 @@ import static org.hamcrest.Matchers.*;
 
 /**
  * Live integration test against the real Clever Cloud API.
- * Skipped unless CLEVER_TOKEN is set in the environment.
+ * Skipped unless CLEVER_API_TOKEN is set in the environment.
  *
  * Covers only read-only tasks. AddMember and RemoveMember mutate the real organisation
  * and are covered exclusively by mock-server unit tests.
  */
 @KestraTest
-@EnabledIfEnvironmentVariable(named = "CLEVER_TOKEN", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "CLEVER_API_TOKEN", matches = ".+")
 class OrganisationsIntegrationTest {
 
     @Inject
@@ -26,20 +26,14 @@ class OrganisationsIntegrationTest {
 
     @Test
     void listMembers_succeeds_against_real_api() throws Exception {
-        var consumerKey = System.getenv("CLEVER_CONSUMER_KEY");
-        var consumerSecret = System.getenv("CLEVER_CONSUMER_SECRET");
-        var token = System.getenv("CLEVER_TOKEN");
-        var tokenSecret = System.getenv("CLEVER_SECRET");
+        var token = System.getenv("CLEVER_API_TOKEN");
         var orgId = System.getenv("CLEVER_ORG_ID");
 
         var task = ListMembers.builder()
             .id("integration-list-members")
             .type(ListMembers.class.getName())
-            .consumerKey(Property.of(consumerKey))
-            .consumerSecret(Property.of(consumerSecret))
-            .token(Property.of(token))
-            .tokenSecret(Property.of(tokenSecret))
-            .organisationId(Property.of(orgId))
+            .apiToken(Property.ofValue(token))
+            .organisationId(Property.ofValue(orgId))
             .build();
 
         var runContext = runContextFactory.of();
@@ -66,20 +60,14 @@ class OrganisationsIntegrationTest {
 
     @Test
     void listApplications_succeeds_against_real_api() throws Exception {
-        var consumerKey = System.getenv("CLEVER_CONSUMER_KEY");
-        var consumerSecret = System.getenv("CLEVER_CONSUMER_SECRET");
-        var token = System.getenv("CLEVER_TOKEN");
-        var tokenSecret = System.getenv("CLEVER_SECRET");
+        var token = System.getenv("CLEVER_API_TOKEN");
         var orgId = System.getenv("CLEVER_ORG_ID");
 
         var task = ListApplications.builder()
             .id("integration-list-apps")
             .type(ListApplications.class.getName())
-            .consumerKey(Property.of(consumerKey))
-            .consumerSecret(Property.of(consumerSecret))
-            .token(Property.of(token))
-            .tokenSecret(Property.of(tokenSecret))
-            .organisationId(Property.of(orgId))
+            .apiToken(Property.ofValue(token))
+            .organisationId(Property.ofValue(orgId))
             .build();
 
         var runContext = runContextFactory.of();

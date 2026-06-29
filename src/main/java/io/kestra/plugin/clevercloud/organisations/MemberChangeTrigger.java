@@ -1,6 +1,10 @@
 package io.kestra.plugin.clevercloud.organisations;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.kestra.core.http.HttpRequest;
+import io.kestra.core.http.client.HttpClient;
+import io.kestra.core.http.client.HttpClientResponseException;
+import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -18,9 +22,14 @@ import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -49,6 +58,8 @@ import java.util.stream.Collectors;
 
         Set the `event` property to MEMBER_ADDED to fire only on additions, MEMBER_REMOVED to fire
         only on removals, or MEMBER_CHANGED to fire on any change.
+
+        organisationId is required: the /self/members endpoint does not exist on the Clever Cloud API.
         """
 )
 @Plugin(
@@ -63,8 +74,7 @@ import java.util.stream.Collectors;
                 triggers:
                   - id: watch_members
                     type: io.kestra.plugin.clevercloud.organisations.MemberChangeTrigger
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     event: MEMBER_ADDED
                     interval: PT1M
@@ -80,51 +90,22 @@ import java.util.stream.Collectors;
 public class MemberChangeTrigger extends AbstractTrigger
     implements PollingTriggerInterface, TriggerOutput<MemberChangeTrigger.Output> {
 
-    @Schema(
-        title = "OAuth consumer key",
-        description = """
-            Defaults to the public clever-tools consumer key baked into the open-source Clever Cloud CLI.
-            Only override if you registered your own OAuth consumer application.
-            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}.
-            """
-    )
-    @PluginProperty(group = "connection", secret = true)
-    @Builder.Default
-    private Property<String> consumerKey = Property.ofValue("T5nFjKeHH4AIlEveuGhB5S3xg8T19e");
-
-    @Schema(
-        title = "OAuth consumer secret",
-        description = """
-            Defaults to the public clever-tools consumer secret baked into the open-source Clever Cloud CLI.
-            Only override if you registered your own OAuth consumer application.
-            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}.
-            """
-    )
-    @PluginProperty(group = "connection", secret = true)
-    @Builder.Default
-    private Property<String> consumerSecret = Property.ofValue("MgVMqTr6fWlf2M0tkC2MXOnhfqBWDT");
-
-    @Schema(
-        title = "OAuth access token",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
-    )
-    @PluginProperty(group = "connection", secret = true)
     @NotNull
-    private Property<String> token;
-
-    @Schema(
-        title = "OAuth access token secret",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
-    )
+    @Schema(title = "API token", description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}.")
     @PluginProperty(group = "connection", secret = true)
-    @NotNull
-    private Property<String> tokenSecret;
+    private Property<String> apiToken;
+
+    @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
+    HttpConfiguration options;
 
     @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
-    @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal accounts)")
+    @Schema(
+        title = "Organisation ID",
+        description = "Required. The /self/members endpoint does not exist on the Clever Cloud API."
+    )
     @PluginProperty(group = "main")
     @NotNull
     private Property<String> organisationId;
@@ -140,7 +121,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     @PluginProperty(group = "main")
     @NotNull
     @Builder.Default
-    private Property<MemberEvent> event = Property.of(MemberEvent.MEMBER_CHANGED);
+    private Property<MemberEvent> event = Property.ofValue(MemberEvent.MEMBER_CHANGED);
 
     @Schema(
         title = "How often to check for membership changes",
@@ -160,20 +141,39 @@ public class MemberChangeTrigger extends AbstractTrigger
         var runContext = conditionContext.getRunContext();
         var logger = runContext.logger();
 
-        var rConsumerKey = runContext.render(consumerKey).as(String.class).orElseThrow();
-        var rConsumerSecret = runContext.render(consumerSecret).as(String.class).orElseThrow();
-        var rToken = runContext.render(token).as(String.class).orElseThrow();
-        var rTokenSecret = runContext.render(tokenSecret).as(String.class).orElseThrow();
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
+        var rApiToken = runContext.render(apiToken).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("apiToken is required")
+        );
+        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("organisationId is required for MemberChangeTrigger")
+        );
         var rEvent = runContext.render(event).as(MemberEvent.class).orElse(MemberEvent.MEMBER_CHANGED);
 
-        var rBaseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
-        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret);
-
-        var url = rBaseUrl + "organisations/" + rOrgId + "/members";
+        var rBaseUrl = resolveBaseUrl(runContext);
+        var url = rBaseUrl + "/organisations/" + rOrgId + "/members";
 
         logger.debug("Polling members for organisation {}", rOrgId);
-        var body = client.get(url);
+
+        String body;
+        try (var client = new HttpClient(runContext, options)) {
+            var request = HttpRequest.builder()
+                .uri(URI.create(url))
+                .method("GET")
+                .addHeader("Authorization", "Bearer " + rApiToken)
+                .addHeader("Content-Type", "application/json; charset=UTF-8")
+                .build();
+            var response = client.request(request, String.class);
+            body = response.getBody() != null ? response.getBody() : "[]";
+        } catch (HttpClientResponseException e) {
+            var status = e.getResponse() != null ? e.getResponse().getStatus().getCode() : -1;
+            logger.debug("Clever Cloud API returned {} on GET {}", status, url);
+            throw new HttpClientResponseException(
+                "Clever Cloud API error " + status + " polling members for " + rOrgId
+                    + ": check apiToken and that the organisation exists",
+                e.getResponse()
+            );
+        }
+
         var members = AbstractCleverCloudConnection.MAPPER.readValue(
             body, new TypeReference<ArrayList<Member>>() {});
 
@@ -231,6 +231,14 @@ public class MemberChangeTrigger extends AbstractTrigger
             .build();
 
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
+    }
+
+    private String resolveBaseUrl(io.kestra.core.runners.RunContext runContext) throws Exception {
+        var override = System.getProperty("clevercloud.api.base.url");
+        String raw = override != null
+            ? override
+            : runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.DEFAULT_BASE_URL);
+        return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
     }
 
     private static String serializeIds(Set<String> ids) throws Exception {

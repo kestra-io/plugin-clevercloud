@@ -35,10 +35,14 @@ class MemberChangeTriggerTest {
 
     MockWebServer mockServer;
 
+    // Each test gets a unique trigger ID to prevent KV store state leaking between tests.
+    private String triggerId;
+
     @BeforeEach
     void setUp() throws Exception {
         mockServer = new MockWebServer();
         mockServer.start();
+        triggerId = "trigger-member-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 
     @AfterEach
@@ -46,26 +50,15 @@ class MemberChangeTriggerTest {
         mockServer.shutdown();
     }
 
-    // Each test gets a unique trigger ID to prevent KV store state leaking between tests.
-    private String triggerId;
-
-    @BeforeEach
-    void setUpTrigger() {
-        triggerId = "trigger-member-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-    }
-
     private MemberChangeTrigger buildTrigger(MemberChangeTrigger.MemberEvent event) {
         return MemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .event(Property.of(event))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .event(Property.ofValue(event))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
     }
 
@@ -120,8 +113,6 @@ class MemberChangeTriggerTest {
         ]
         """;
 
-    private static final String EMPTY_JSON = "[]";
-
     @Test
     void firstEvaluationStoresBaselineAndDoesNotFire() throws Exception {
         mockServer.enqueue(new MockResponse()
@@ -155,10 +146,8 @@ class MemberChangeTriggerTest {
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
-        // Establish baseline
         trigger.evaluate(condCtx, trigCtx);
 
-        // Second evaluation with same members
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
         assertThat("trigger must not re-fire on an unchanged member set", result.isEmpty(), is(true));
@@ -298,5 +287,30 @@ class MemberChangeTriggerTest {
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
         assertThat("MEMBER_CHANGED event must fire on any change", result.isPresent(), is(true));
+    }
+
+    @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody(MEMBER_A_JSON));
+
+        var trigger = MemberChangeTrigger.builder()
+            .id(triggerId)
+            .type(MemberChangeTrigger.class.getName())
+            .apiToken(Property.ofValue("my-secret-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .event(Property.ofValue(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED))
+            .interval(Duration.ofMinutes(1))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var trigCtx = triggerContext();
+        var condCtx = conditionContext(trigger, trigCtx);
+        trigger.evaluate(condCtx, trigCtx);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
     }
 }

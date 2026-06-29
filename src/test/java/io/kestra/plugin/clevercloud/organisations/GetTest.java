@@ -1,5 +1,6 @@
 package io.kestra.plugin.clevercloud.organisations;
 
+import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
@@ -55,12 +56,9 @@ class GetTest {
         var task = Get.builder()
             .id("get-org-test")
             .type(Get.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_abc123"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_abc123"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -76,7 +74,31 @@ class GetTest {
     }
 
     @Test
-    void requestUrlContainsOrgId() throws Exception {
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                {"id":"orga_abc123","name":"Acme Corp","cleverEnterprise":false}
+                """));
+
+        var task = Get.builder()
+            .id("get-auth-test")
+            .type(Get.class.getName())
+            .apiToken(Property.ofValue("my-secret-token"))
+            .organisationId(Property.ofValue("orga_abc123"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+    }
+
+    @Test
+    void usesOrganisationPathWhenOrgIdProvided() throws Exception {
         mockServer.enqueue(new MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
@@ -85,14 +107,11 @@ class GetTest {
                 """));
 
         var task = Get.builder()
-            .id("get-url-test")
+            .id("get-org-path-test")
             .type(Get.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_xyz789"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_xyz789"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -103,7 +122,31 @@ class GetTest {
     }
 
     @Test
-    void throwsOnNonSuccessResponse() {
+    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                {"id":"user_personal123","name":"Personal Account","cleverEnterprise":false}
+                """));
+
+        var task = Get.builder()
+            .id("get-self-path-test")
+            .type(Get.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/self"));
+        assertThat(request.getPath(), not(containsString("/organisations/")));
+    }
+
+    @Test
+    void throwsCleanExceptionOn403WithoutBodyLeak() {
         mockServer.enqueue(new MockResponse()
             .setResponseCode(403)
             .addHeader("Content-Type", "application/json")
@@ -114,16 +157,14 @@ class GetTest {
         var task = Get.builder()
             .id("get-403-test")
             .type(Get.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("user_personal123"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_xyz"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
-        var ex = assertThrows(Exception.class, () -> task.run(runContext));
+        var ex = assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("403"));
+        assertThat(ex.getMessage(), not(containsString("is not allowed")));
     }
 }

@@ -63,12 +63,9 @@ class ListAddonsTest {
         var task = ListAddons.builder()
             .id("list-addons-test")
             .type(ListAddons.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -99,12 +96,9 @@ class ListAddonsTest {
         var task = ListAddons.builder()
             .id("list-addons-empty-test")
             .type(ListAddons.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_empty"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_empty"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -112,5 +106,71 @@ class ListAddonsTest {
 
         assertThat(output.getTotal(), is(0));
         assertThat(output.getAddons(), is(empty()));
+    }
+
+    @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = ListAddons.builder()
+            .id("list-addons-auth-test")
+            .type(ListAddons.class.getName())
+            .apiToken(Property.ofValue("my-secret-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+    }
+
+    @Test
+    void usesOrganisationPathWhenOrgIdProvided() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = ListAddons.builder()
+            .id("list-addons-org-path-test")
+            .type(ListAddons.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_abc123"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/organisations/orga_abc123/addons"));
+    }
+
+    @Test
+    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = ListAddons.builder()
+            .id("list-addons-self-path-test")
+            .type(ListAddons.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/self/addons"));
+        assertThat(request.getPath(), not(containsString("/organisations/")));
     }
 }

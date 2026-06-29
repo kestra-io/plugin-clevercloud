@@ -10,7 +10,10 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 @SuperBuilder
@@ -23,6 +26,7 @@ import lombok.experimental.SuperBuilder;
     description = """
         Removes the specified user from the organisation. The user ID can be obtained
         from the ListMembers task (member.id field).
+        organisationId is required: the /self/members endpoint does not exist.
         """
 )
 @Plugin(
@@ -37,8 +41,7 @@ import lombok.experimental.SuperBuilder;
                 tasks:
                   - id: remove
                     type: io.kestra.plugin.clevercloud.organisations.RemoveMember
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     userId: "user_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 """
@@ -47,7 +50,10 @@ import lombok.experimental.SuperBuilder;
 )
 public class RemoveMember extends AbstractCleverCloudConnection implements RunnableTask<VoidOutput> {
 
-    @Schema(title = "Organisation ID (orga_xxx)")
+    @Schema(
+        title = "Organisation ID",
+        description = "Required. The /self/members endpoint does not exist on the Clever Cloud API."
+    )
     @PluginProperty(group = "main")
     @NotNull
     private Property<String> organisationId;
@@ -63,15 +69,14 @@ public class RemoveMember extends AbstractCleverCloudConnection implements Runna
     @Override
     public VoidOutput run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var client = signedClient(runContext);
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rUserId = runContext.render(userId).as(String.class).orElseThrow();
 
-        var url = baseUrl(runContext) + "organisations/" + rOrgId + "/members/" + rUserId;
+        var url = baseUrl(runContext) + "/organisations/" + rOrgId + "/members/" + rUserId;
 
         logger.info("Removing member {} from organisation {}", rUserId, rOrgId);
-        client.delete(url);
+        makeCall(runContext, buildDeleteRequest(url));
 
         return null;
     }

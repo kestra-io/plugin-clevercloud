@@ -78,12 +78,9 @@ class ListApplicationsTest {
         var task = ListApplications.builder()
             .id("list-apps-test")
             .type(ListApplications.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_test"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -115,12 +112,9 @@ class ListApplicationsTest {
         var task = ListApplications.builder()
             .id("list-apps-empty-test")
             .type(ListApplications.class.getName())
-            .consumerKey(Property.of("ck"))
-            .consumerSecret(Property.of("cs"))
-            .token(Property.of("tk"))
-            .tokenSecret(Property.of("ts"))
-            .organisationId(Property.of("orga_empty"))
-            .apiBaseUrl(Property.of(mockServer.url("/v2/").toString()))
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_empty"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -128,5 +122,71 @@ class ListApplicationsTest {
 
         assertThat(output.getTotal(), is(0));
         assertThat(output.getApplications(), is(empty()));
+    }
+
+    @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = ListApplications.builder()
+            .id("list-apps-auth-test")
+            .type(ListApplications.class.getName())
+            .apiToken(Property.ofValue("my-secret-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+    }
+
+    @Test
+    void usesOrganisationPathWhenOrgIdProvided() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = ListApplications.builder()
+            .id("list-apps-org-path-test")
+            .type(ListApplications.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_abc123"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/organisations/orga_abc123/applications"));
+    }
+
+    @Test
+    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = ListApplications.builder()
+            .id("list-apps-self-path-test")
+            .type(ListApplications.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/self/applications"));
+        assertThat(request.getPath(), not(containsString("/organisations/")));
     }
 }
