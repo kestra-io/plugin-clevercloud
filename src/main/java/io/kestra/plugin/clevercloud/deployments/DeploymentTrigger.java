@@ -1,6 +1,10 @@
 package io.kestra.plugin.clevercloud.deployments;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import io.kestra.core.http.HttpRequest;
+import io.kestra.core.http.client.HttpClient;
+import io.kestra.core.http.client.HttpClientResponseException;
+import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -17,9 +21,14 @@ import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -43,6 +52,8 @@ import java.util.Optional;
         Dedup is timestamp-based: only deployments whose date (epoch milliseconds) is strictly after
         the previous evaluation cutoff are considered, preventing re-fires on already-seen deployments.
 
+        When organisationId is omitted, the personal account endpoint (/self) is used.
+
         Real state values from the Clever Cloud API: OK (success), FAIL (error), CANCELLED, WIP (in-progress).
         """
 )
@@ -58,9 +69,29 @@ import java.util.Optional;
                 triggers:
                   - id: watch_deploy
                     type: io.kestra.plugin.clevercloud.deployments.DeploymentTrigger
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    targetState: OK
+                    interval: PT1M
+
+                tasks:
+                  - id: log
+                    type: io.kestra.plugin.core.log.Log
+                    message: "Deployment {{ trigger.deploymentId }} succeeded (commit {{ trigger.commit }})"
+                """
+        ),
+        @Example(
+            title = "Fire when a personal account deployment succeeds",
+            full = true,
+            code = """
+                id: on_personal_deploy_ok
+                namespace: company.team
+
+                triggers:
+                  - id: watch_deploy
+                    type: io.kestra.plugin.clevercloud.deployments.DeploymentTrigger
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     targetState: OK
                     interval: PT1M
@@ -76,53 +107,23 @@ import java.util.Optional;
 public class DeploymentTrigger extends AbstractTrigger
     implements PollingTriggerInterface, TriggerOutput<DeploymentTrigger.Output> {
 
-    @Schema(
-        title = "OAuth consumer key",
-        description = """
-            Defaults to the public clever-tools consumer key baked into the open-source Clever Cloud CLI.
-            Only override if you registered your own OAuth consumer application.
-            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_KEY') }}.
-            """
-    )
-    @PluginProperty(group = "connection", secret = true)
-    @Builder.Default
-    private Property<String> consumerKey = Property.ofValue("T5nFjKeHH4AIlEveuGhB5S3xg8T19e");
-
-    @Schema(
-        title = "OAuth consumer secret",
-        description = """
-            Defaults to the public clever-tools consumer secret baked into the open-source Clever Cloud CLI.
-            Only override if you registered your own OAuth consumer application.
-            Store overrides as a Kestra secret and reference with {{ secret('CC_CONSUMER_SECRET') }}.
-            """
-    )
-    @PluginProperty(group = "connection", secret = true)
-    @Builder.Default
-    private Property<String> consumerSecret = Property.ofValue("MgVMqTr6fWlf2M0tkC2MXOnhfqBWDT");
-
-    @Schema(
-        title = "OAuth access token",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN') }}."
-    )
-    @PluginProperty(group = "connection", secret = true)
     @NotNull
-    private Property<String> token;
-
-    @Schema(
-        title = "OAuth access token secret",
-        description = "Store as a Kestra secret and reference with {{ secret('CC_TOKEN_SECRET') }}."
-    )
+    @Schema(title = "API token", description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}.")
     @PluginProperty(group = "connection", secret = true)
-    @NotNull
-    private Property<String> tokenSecret;
+    private Property<String> apiToken;
+
+    @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
+    HttpConfiguration options;
 
     @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
     @PluginProperty(group = "advanced", hidden = true)
     private Property<String> apiBaseUrl;
 
-    @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal apps)")
+    @Schema(
+        title = "Organisation ID",
+        description = "When omitted, the personal account endpoint (/self) is used instead."
+    )
     @PluginProperty(group = "main")
-    @NotNull
     private Property<String> organisationId;
 
     @Schema(title = "Application ID to watch")
@@ -172,25 +173,42 @@ public class DeploymentTrigger extends AbstractTrigger
         var runContext = conditionContext.getRunContext();
         var logger = runContext.logger();
 
-        var rConsumerKey = runContext.render(consumerKey).as(String.class).orElseThrow();
-        var rConsumerSecret = runContext.render(consumerSecret).as(String.class).orElseThrow();
-        var rToken = runContext.render(token).as(String.class).orElseThrow();
-        var rTokenSecret = runContext.render(tokenSecret).as(String.class).orElseThrow();
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
+        var rApiToken = runContext.render(apiToken).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("apiToken is required")
+        );
+        var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
         var rAppId = runContext.render(applicationId).as(String.class).orElseThrow();
         var rTargetState = runContext.render(targetState).as(DeploymentState.class).orElseThrow();
         var rMaxDeployments = runContext.render(maxDeployments).as(Integer.class).orElse(25);
 
-        var rBaseUrl = runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.BASE_URL);
-        var client = AbstractCleverCloudConnection.signedClient(rConsumerKey, rConsumerSecret, rToken, rTokenSecret);
-
+        var rBaseUrl = resolveBaseUrl(runContext);
         var url = rBaseUrl
-            + "organisations/" + rOrgId
+            + "/" + AbstractCleverCloudConnection.resourceBase(rOrgId)
             + "/applications/" + rAppId
             + "/deployments?limit=" + rMaxDeployments;
 
         logger.debug("Polling deployments for application {}", rAppId);
-        var body = client.get(url);
+
+        String body;
+        try (var client = new HttpClient(runContext, options)) {
+            var request = HttpRequest.builder()
+                .uri(URI.create(url))
+                .method("GET")
+                .addHeader("Authorization", "Bearer " + rApiToken)
+                .addHeader("Content-Type", "application/json; charset=UTF-8")
+                .build();
+            var response = client.request(request, String.class);
+            body = response.getBody() != null ? response.getBody() : "[]";
+        } catch (HttpClientResponseException e) {
+            var status = e.getResponse() != null ? e.getResponse().getStatus().getCode() : -1;
+            logger.debug("Clever Cloud API returned {} on GET {}", status, url);
+            throw new HttpClientResponseException(
+                "Clever Cloud API error " + status + " polling deployments for " + rAppId
+                    + ": check apiToken and that the application exists",
+                e.getResponse()
+            );
+        }
+
         var deployments = AbstractCleverCloudConnection.MAPPER.readValue(
             body, new TypeReference<ArrayList<Deployment>>() {});
 
@@ -219,6 +237,14 @@ public class DeploymentTrigger extends AbstractTrigger
             .build();
 
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
+    }
+
+    private String resolveBaseUrl(io.kestra.core.runners.RunContext runContext) throws Exception {
+        var override = System.getProperty("clevercloud.api.base.url");
+        String raw = override != null
+            ? override
+            : runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.DEFAULT_BASE_URL);
+        return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
     }
 
     /**

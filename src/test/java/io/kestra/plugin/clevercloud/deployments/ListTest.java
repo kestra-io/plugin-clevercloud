@@ -1,5 +1,6 @@
 package io.kestra.plugin.clevercloud.deployments;
 
+import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
@@ -9,8 +10,6 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -64,13 +63,10 @@ class ListTest {
         var task = List.builder()
             .id("list-test")
             .type(List.class.getName())
-            .consumerKey(Property.ofValue("test-consumer-key"))
-            .consumerSecret(Property.ofValue("test-consumer-secret"))
-            .token(Property.ofValue("test-token"))
-            .tokenSecret(Property.ofValue("test-token-secret"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -97,13 +93,10 @@ class ListTest {
         var task = List.builder()
             .id("list-default-limit-test")
             .type(List.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -123,14 +116,11 @@ class ListTest {
         var task = List.builder()
             .id("list-limit-test")
             .type(List.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .limit(Property.ofValue(5))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -150,13 +140,10 @@ class ListTest {
         var task = List.builder()
             .id("list-empty-test")
             .type(List.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -167,7 +154,7 @@ class ListTest {
     }
 
     @Test
-    void throwsCleanIoExceptionOn500WithoutBodyLeak() {
+    void throwsCleanExceptionOn500WithoutBodyLeak() {
         mockServer.enqueue(new MockResponse()
             .setResponseCode(500)
             .addHeader("Content-Type", "application/json")
@@ -176,20 +163,84 @@ class ListTest {
         var task = List.builder()
             .id("list-500-test")
             .type(List.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
-        var ex = assertThrows(IOException.class, () -> task.run(runContext));
+        var ex = assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("500"));
-        // The raw API response body must not appear in the exception message.
         assertThat(ex.getMessage(), not(containsString("super-secret-internal-error")));
         assertThat(ex.getMessage(), not(containsString("leaked-value")));
+    }
+
+    @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = List.builder()
+            .id("list-auth-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("my-secret-token"))
+            .applicationId(Property.ofValue("app_test"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+    }
+
+    @Test
+    void usesOrganisationPathWhenOrgIdProvided() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = List.builder()
+            .id("list-org-path-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_myorg"))
+            .applicationId(Property.ofValue("app_myapp"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/organisations/orga_myorg/applications/app_myapp/deployments"));
+    }
+
+    @Test
+    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var task = List.builder()
+            .id("list-self-path-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_myapp"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/self/applications/app_myapp/deployments"));
+        assertThat(request.getPath(), not(containsString("/organisations/")));
     }
 }

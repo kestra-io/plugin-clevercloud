@@ -10,7 +10,11 @@ import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 @SuperBuilder
@@ -24,12 +28,13 @@ import lombok.experimental.SuperBuilder;
         Retrieves a single deployment by its ID. Returns the deployment state, action,
         cause, date (epoch milliseconds), and the git commit SHA when available.
         Terminal states are OK (success), FAIL (error), and CANCELLED.
+        When organisationId is omitted, the personal account endpoint (/self) is used.
         """
 )
 @Plugin(
     examples = {
         @Example(
-            title = "Fetch a specific deployment",
+            title = "Fetch a specific deployment for an organisation application",
             full = true,
             code = """
                 id: get_deployment
@@ -38,9 +43,23 @@ import lombok.experimental.SuperBuilder;
                 tasks:
                   - id: get
                     type: io.kestra.plugin.clevercloud.deployments.Get
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    deploymentId: "{{ inputs.deploymentId }}"
+                """
+        ),
+        @Example(
+            title = "Fetch a specific deployment for a personal account application",
+            full = true,
+            code = """
+                id: get_personal_deployment
+                namespace: company.team
+
+                tasks:
+                  - id: get
+                    type: io.kestra.plugin.clevercloud.deployments.Get
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     deploymentId: "{{ inputs.deploymentId }}"
                 """
@@ -49,9 +68,11 @@ import lombok.experimental.SuperBuilder;
 )
 public class Get extends AbstractCleverCloudConnection implements RunnableTask<Get.Output> {
 
-    @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal apps)")
+    @Schema(
+        title = "Organisation ID",
+        description = "When omitted, the personal account endpoint (/self) is used instead."
+    )
     @PluginProperty(group = "main")
-    @NotNull
     private Property<String> organisationId;
 
     @Schema(title = "Application ID")
@@ -67,19 +88,18 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var client = signedClient(runContext);
 
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
+        var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
         var rAppId = runContext.render(applicationId).as(String.class).orElseThrow();
         var rDeployId = runContext.render(deploymentId).as(String.class).orElseThrow();
 
         var url = baseUrl(runContext)
-            + "organisations/" + rOrgId
+            + "/" + resourceBase(rOrgId)
             + "/applications/" + rAppId
             + "/deployments/" + rDeployId;
 
         logger.info("Fetching deployment {}", rDeployId);
-        var body = client.get(url);
+        var body = makeCall(runContext, buildGetRequest(url));
         var deployment = MAPPER.readValue(body, Deployment.class);
 
         return Output.builder()

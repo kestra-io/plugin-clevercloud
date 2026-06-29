@@ -50,13 +50,6 @@ dependencies {
     annotationProcessor group: "io.kestra", name: "processor", version: kestraVersion
     compileOnly group: "io.kestra", name: "core", version: kestraVersion
     compileOnly group: "io.kestra", name: "script", version: kestraVersion
-
-    // OAuth 1.0a signing for Clever Cloud API
-    implementation "com.github.scribejava:scribejava-apis:8.3.3"
-    implementation "com.github.scribejava:scribejava-core:8.3.3"
-
-    // HTTP client
-    implementation "com.squareup.okhttp3:okhttp:4.12.0"
 }
 
 
@@ -69,10 +62,7 @@ test {
     // The integration tests guard themselves with @EnabledIfEnvironmentVariable so these are
     // ignored when the vars are absent.
     [
-        "CLEVER_CONSUMER_KEY",
-        "CLEVER_CONSUMER_SECRET",
-        "CLEVER_TOKEN",
-        "CLEVER_SECRET",
+        "CLEVER_API_TOKEN",
         "CLEVER_ORG_ID",
         "CLEVER_APP_ID"
     ].each { key ->

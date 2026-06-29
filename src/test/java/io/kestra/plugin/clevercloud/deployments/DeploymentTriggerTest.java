@@ -52,15 +52,24 @@ class DeploymentTriggerTest {
         return DeploymentTrigger.builder()
             .id("trigger-test")
             .type(DeploymentTrigger.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .targetState(Property.ofValue(DeploymentState.OK))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+    }
+
+    private DeploymentTrigger buildTriggerWithoutOrg() {
+        return DeploymentTrigger.builder()
+            .id("trigger-self-test")
+            .type(DeploymentTrigger.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_personal"))
+            .targetState(Property.ofValue(DeploymentState.OK))
+            .interval(Duration.ofMinutes(1))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
     }
 
@@ -88,7 +97,6 @@ class DeploymentTriggerTest {
 
     @Test
     void firesWhenNewDeploymentMatchesTargetState() throws Exception {
-        // Deployment epoch 5 minutes ago, cutoff is 10 minutes ago: deployment is newer, trigger fires.
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var deploymentEpochMillis = Instant.now().minusSeconds(300).toEpochMilli();
 
@@ -116,13 +124,11 @@ class DeploymentTriggerTest {
 
         assertThat(result.isPresent(), is(true));
         assertThat(result.get(), notNullValue());
-        // Exactly one HTTP request was made per evaluation cycle.
         assertThat(mockServer.getRequestCount(), is(1));
     }
 
     @Test
     void doesNotRefireOnAlreadySeenDeployment() throws Exception {
-        // Deployment epoch 15 minutes ago, cutoff is 5 minutes ago: deployment predates cutoff, no fire.
         var lastPoll = ZonedDateTime.now().minusMinutes(5);
         var oldDeploymentEpochMillis = Instant.now().minusSeconds(900).toEpochMilli();
 
@@ -183,7 +189,6 @@ class DeploymentTriggerTest {
 
     @Test
     void doesNotFireOnDeploymentWithMissingDate() throws Exception {
-        // Deployments with no date field are skipped to avoid risk of re-firing.
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
 
         mockServer.enqueue(new MockResponse()
@@ -212,7 +217,6 @@ class DeploymentTriggerTest {
 
     @Test
     void doesNotFireOnUndeployRecord() throws Exception {
-        // UNDEPLOY records (e.g. scaling/moderation) must not fire the trigger even when their state matches.
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var deploymentEpochMillis = Instant.now().minusSeconds(60).toEpochMilli();
 
@@ -242,8 +246,6 @@ class DeploymentTriggerTest {
 
     @Test
     void firesOnlyOnceWhenMultipleDeploymentsMatch() throws Exception {
-        // Two matching deployments: the trigger must fire exactly once (findFirst semantics)
-        // and must issue exactly one HTTP request per evaluation.
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var epoch1 = Instant.now().minusSeconds(120).toEpochMilli();
         var epoch2 = Instant.now().minusSeconds(60).toEpochMilli();
@@ -279,7 +281,50 @@ class DeploymentTriggerTest {
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
         assertThat("trigger must fire when at least one deployment matches", result.isPresent(), is(true));
-        // Only one HTTP request per evaluation cycle regardless of how many deployments matched.
         assertThat(mockServer.getRequestCount(), is(1));
+    }
+
+    @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        var lastPoll = ZonedDateTime.now().minusMinutes(10);
+
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var trigger = buildTrigger();
+        var trigCtx = triggerContext(lastPoll);
+        var condCtx = conditionContext(trigger, trigCtx);
+
+        trigger.evaluate(condCtx, trigCtx);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer test-api-token"));
+    }
+
+    @Test
+    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+        var lastPoll = ZonedDateTime.now().minusMinutes(10);
+
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("[]"));
+
+        var trigger = buildTriggerWithoutOrg();
+        var trigCtx = TriggerContext.builder()
+            .namespace("company.team")
+            .flowId("test-flow")
+            .triggerId("trigger-self-test")
+            .date(lastPoll)
+            .build();
+        var condCtx = conditionContext(trigger, trigCtx);
+
+        trigger.evaluate(condCtx, trigCtx);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), org.hamcrest.Matchers.containsString("/self/applications/app_personal/deployments"));
+        assertThat(request.getPath(), org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("/organisations/")));
     }
 }

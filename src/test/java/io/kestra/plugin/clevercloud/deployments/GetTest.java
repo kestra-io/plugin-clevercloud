@@ -51,14 +51,11 @@ class GetTest {
         var task = Get.builder()
             .id("get-test")
             .type(Get.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_5ea89906-3651-4ffc-989a-bf54db93a9c8"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -84,14 +81,11 @@ class GetTest {
         var task = Get.builder()
             .id("get-url-test")
             .type(Get.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_abc"))
             .applicationId(Property.ofValue("app_xyz"))
             .deploymentId(Property.ofValue("deployment_d1"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -103,7 +97,6 @@ class GetTest {
 
     @Test
     void nullCommitForNonGitDeploy() throws Exception {
-        // UNDEPLOY records (e.g. from Killed/Moderated) have no commit field.
         mockServer.enqueue(new MockResponse()
             .setResponseCode(200)
             .addHeader("Content-Type", "application/json")
@@ -120,14 +113,11 @@ class GetTest {
         var task = Get.builder()
             .id("get-undeploy-test")
             .type(Get.class.getName())
-            .consumerKey(Property.ofValue("ck"))
-            .consumerSecret(Property.ofValue("cs"))
-            .token(Property.ofValue("tk"))
-            .tokenSecret(Property.ofValue("ts"))
+            .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_cb6f0557-7c84-46b2-837c-e121e54cde78"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("/v2/").toString()))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
             .build();
 
         var runContext = runContextFactory.of();
@@ -136,5 +126,56 @@ class GetTest {
         assertThat(output.getState(), is("OK"));
         assertThat(output.getAction(), is("UNDEPLOY"));
         assertThat(output.getCommit(), is(nullValue()));
+    }
+
+    @Test
+    void sendsBearerAuthorizationHeader() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                {"uuid":"deployment_d1","state":"OK","date":"1782127329927","action":"DEPLOY"}
+                """));
+
+        var task = Get.builder()
+            .id("get-auth-test")
+            .type(Get.class.getName())
+            .apiToken(Property.ofValue("my-bearer-token"))
+            .applicationId(Property.ofValue("app_test"))
+            .deploymentId(Property.ofValue("deployment_d1"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getHeader("Authorization"), is("Bearer my-bearer-token"));
+    }
+
+    @Test
+    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                {"uuid":"deployment_d2","state":"OK","date":"1782127329927","action":"DEPLOY"}
+                """));
+
+        var task = Get.builder()
+            .id("get-self-path-test")
+            .type(Get.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_mine"))
+            .deploymentId(Property.ofValue("deployment_d2"))
+            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        var request = mockServer.takeRequest();
+        assertThat(request.getPath(), containsString("/self/applications/app_mine/deployments/deployment_d2"));
+        assertThat(request.getPath(), not(containsString("/organisations/")));
     }
 }

@@ -6,17 +6,20 @@ import io.kestra.core.runners.RunContextFactory;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariables;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 /**
  * Live integration test against the real Clever Cloud API.
- * Skipped unless CLEVER_TOKEN is set in the environment.
- * All six env vars must be present for the test to be meaningful.
+ * Skipped unless CLEVER_API_TOKEN is set in the environment.
  */
 @KestraTest
-@EnabledIfEnvironmentVariable(named = "CLEVER_TOKEN", matches = ".+")
+@EnabledIfEnvironmentVariables({
+    @EnabledIfEnvironmentVariable(named = "CLEVER_API_TOKEN", matches = ".+"),
+    @EnabledIfEnvironmentVariable(named = "CLEVER_APP_ID", matches = ".+")
+})
 class DeploymentsIntegrationTest {
 
     @Inject
@@ -24,21 +27,15 @@ class DeploymentsIntegrationTest {
 
     @Test
     void listDeployments_succeeds_against_real_api() throws Exception {
-        var consumerKey = System.getenv("CLEVER_CONSUMER_KEY");
-        var consumerSecret = System.getenv("CLEVER_CONSUMER_SECRET");
-        var token = System.getenv("CLEVER_TOKEN");
-        var tokenSecret = System.getenv("CLEVER_SECRET");
+        var apiToken = System.getenv("CLEVER_API_TOKEN");
         var orgId = System.getenv("CLEVER_ORG_ID");
         var appId = System.getenv("CLEVER_APP_ID");
 
         var task = List.builder()
             .id("integration-list")
             .type(List.class.getName())
-            .consumerKey(Property.ofValue(consumerKey))
-            .consumerSecret(Property.ofValue(consumerSecret))
-            .token(Property.ofValue(token))
-            .tokenSecret(Property.ofValue(tokenSecret))
-            .organisationId(Property.ofValue(orgId))
+            .apiToken(Property.ofValue(apiToken))
+            .organisationId(orgId != null ? Property.ofValue(orgId) : null)
             .applicationId(Property.ofValue(appId))
             .build();
 
@@ -59,11 +56,8 @@ class DeploymentsIntegrationTest {
             var getTask = Get.builder()
                 .id("integration-get")
                 .type(Get.class.getName())
-                .consumerKey(Property.ofValue(consumerKey))
-                .consumerSecret(Property.ofValue(consumerSecret))
-                .token(Property.ofValue(token))
-                .tokenSecret(Property.ofValue(tokenSecret))
-                .organisationId(Property.ofValue(orgId))
+                .apiToken(Property.ofValue(apiToken))
+                .organisationId(orgId != null ? Property.ofValue(orgId) : null)
                 .applicationId(Property.ofValue(appId))
                 .deploymentId(Property.ofValue(first.getUuid()))
                 .build();

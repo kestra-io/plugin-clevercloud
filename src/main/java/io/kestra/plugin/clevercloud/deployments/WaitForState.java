@@ -11,7 +11,11 @@ import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.time.Duration;
@@ -31,6 +35,8 @@ import java.time.Instant;
         WIP means the deployment is still in progress. A successful deployment has state OK
         and action DEPLOY. Throws when the deployment reaches a terminal state that is not
         the target, or when the timeout elapses.
+
+        When organisationId is omitted, the personal account endpoint (/self) is used.
         """
 )
 @Plugin(
@@ -45,8 +51,7 @@ import java.time.Instant;
                 tasks:
                   - id: wait
                     type: io.kestra.plugin.clevercloud.deployments.WaitForState
-                    token: "{{ secret('CC_TOKEN') }}"
-                    tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     deploymentId: "{{ inputs.deploymentId }}"
@@ -59,9 +64,11 @@ import java.time.Instant;
 )
 public class WaitForState extends AbstractCleverCloudConnection implements RunnableTask<WaitForState.Output> {
 
-    @Schema(title = "Organisation ID (orga_xxx or user_xxx for personal apps)")
+    @Schema(
+        title = "Organisation ID",
+        description = "When omitted, the personal account endpoint (/self) is used instead."
+    )
     @PluginProperty(group = "main")
-    @NotNull
     private Property<String> organisationId;
 
     @Schema(title = "Application ID")
@@ -105,9 +112,8 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
-        var client = signedClient(runContext);
 
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
+        var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
         var rAppId = runContext.render(applicationId).as(String.class).orElseThrow();
         var rDeployId = runContext.render(deploymentId).as(String.class).orElseThrow();
         var rTargetState = runContext.render(targetState).as(DeploymentState.class).orElseThrow();
@@ -115,7 +121,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         var rTimeout = runContext.render(timeout).as(Duration.class).orElse(Duration.ofMinutes(30));
 
         var url = baseUrl(runContext)
-            + "organisations/" + rOrgId
+            + "/" + resourceBase(rOrgId)
             + "/applications/" + rAppId
             + "/deployments/" + rDeployId;
 
@@ -123,7 +129,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         logger.info("Waiting for deployment {} to reach state {} (timeout: {})", rDeployId, rTargetState, rTimeout);
 
         while (true) {
-            var body = client.get(url);
+            var body = makeCall(runContext, buildGetRequest(url));
             var deployment = MAPPER.readValue(body, Deployment.class);
             var rawState = deployment.getState();
 
