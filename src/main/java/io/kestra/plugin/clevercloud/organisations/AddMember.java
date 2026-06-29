@@ -42,8 +42,6 @@ import java.util.Map;
                 tasks:
                   - id: add
                     type: io.kestra.plugin.clevercloud.organisations.AddMember
-                    consumerKey: "{{ secret('CC_CONSUMER_KEY') }}"
-                    consumerSecret: "{{ secret('CC_CONSUMER_SECRET') }}"
                     token: "{{ secret('CC_TOKEN') }}"
                     tokenSecret: "{{ secret('CC_TOKEN_SECRET') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
