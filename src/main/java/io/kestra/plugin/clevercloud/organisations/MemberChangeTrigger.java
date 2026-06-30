@@ -98,9 +98,9 @@ public class MemberChangeTrigger extends AbstractTrigger
     @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
     HttpConfiguration options;
 
-    @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
-    @PluginProperty(group = "advanced", hidden = true)
-    private Property<String> apiBaseUrl;
+    protected String baseUrl() {
+        return AbstractCleverCloudConnection.DEFAULT_BASE_URL;
+    }
 
     @Schema(
         title = "Organisation ID",
@@ -149,8 +149,7 @@ public class MemberChangeTrigger extends AbstractTrigger
         );
         var rEvent = runContext.render(event).as(MemberEvent.class).orElse(MemberEvent.MEMBER_CHANGED);
 
-        var rBaseUrl = resolveBaseUrl(runContext);
-        var url = rBaseUrl + "/organisations/" + rOrgId + "/members";
+        var url = baseUrl() + "/organisations/" + rOrgId + "/members";
 
         logger.debug("Polling members for organisation {}", rOrgId);
 
@@ -231,14 +230,6 @@ public class MemberChangeTrigger extends AbstractTrigger
             .build();
 
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
-    }
-
-    private String resolveBaseUrl(io.kestra.core.runners.RunContext runContext) throws Exception {
-        var override = System.getProperty("clevercloud.api.base.url");
-        String raw = override != null
-            ? override
-            : runContext.render(apiBaseUrl).as(String.class).orElse(AbstractCleverCloudConnection.DEFAULT_BASE_URL);
-        return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
     }
 
     private static String serializeIds(Set<String> ids) throws Exception {

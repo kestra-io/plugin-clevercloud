@@ -6,7 +6,9 @@ import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,7 +19,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
+import reactor.core.publisher.Flux;
 
+import java.io.FileWriter;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,6 +38,7 @@ import java.util.List;
         Each entry contains a user info object (id, email, name, avatar) along with
         the role assigned within this organisation.
         The /self/members endpoint does not exist on the Clever Cloud API, so organisationId is required.
+        Use fetchType to control how the members are exposed in the output.
         """
 )
 @Plugin(
@@ -63,6 +69,11 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
     @NotNull
     private Property<String> organisationId;
 
+    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ion file and returns its uri, NONE returns nothing but the count")
+    @PluginProperty(group = "processing")
+    @Builder.Default
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
@@ -70,25 +81,49 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
             () -> new IllegalArgumentException("organisationId is required for ListMembers: /self/members does not exist")
         );
-        var url = baseUrl(runContext) + "/organisations/" + rOrgId + "/members";
+        var url = baseUrl() + "/organisations/" + rOrgId + "/members";
 
         logger.info("Listing members for organisation {}", rOrgId);
         var body = makeCall(runContext, buildGetRequest(url));
         var members = MAPPER.readValue(body, new TypeReference<ArrayList<Member>>() {});
 
         logger.info("Found {} member(s)", members.size());
-        return Output.builder()
-            .members(members)
-            .total(members.size())
-            .build();
+
+        var outputBuilder = Output.builder().total(members.size());
+
+        switch (runContext.render(fetchType).as(FetchType.class).orElseThrow()) {
+            case FETCH -> outputBuilder.members(members);
+            case FETCH_ONE -> outputBuilder.member(members.isEmpty() ? null : members.getFirst());
+            case STORE -> outputBuilder.uri(store(runContext, members));
+            case NONE -> {
+            }
+        }
+
+        return outputBuilder.build();
+    }
+
+    private URI store(RunContext runContext, List<Member> members) throws Exception {
+        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
+
+        try (var writer = new FileWriter(tempFile)) {
+            FileSerde.writeAll(writer, Flux.fromIterable(members)).block();
+        }
+
+        return runContext.storage().putFile(tempFile);
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "List of organisation members")
+        @Schema(title = "List of organisation members", description = "Populated when fetchType is FETCH")
         private final List<Member> members;
+
+        @Schema(title = "First member returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no member was found")
+        private final Member member;
+
+        @Schema(title = "URI of the stored members", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage")
+        private final URI uri;
 
         @Schema(title = "Total number of members returned")
         private final int total;

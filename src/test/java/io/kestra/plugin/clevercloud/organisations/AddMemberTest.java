@@ -48,14 +48,14 @@ class AddMemberTest {
                 }
                 """));
 
-        var task = AddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .email(Property.ofValue("newdev@example.com"))
             .role(Property.ofValue(OrgRole.DEVELOPER))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -76,14 +76,14 @@ class AddMemberTest {
     void requestBodyContainsJsonContentType() throws Exception {
         mockServer.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
 
-        var task = AddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-ct-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .email(Property.ofValue("user@example.com"))
             .role(Property.ofValue(OrgRole.READ_ONLY))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -97,14 +97,14 @@ class AddMemberTest {
     void serialisesRoleNameCorrectly() throws Exception {
         mockServer.enqueue(new MockResponse().setResponseCode(200).setBody("{}"));
 
-        var task = AddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-role-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .email(Property.ofValue("ro@example.com"))
             .role(Property.ofValue(OrgRole.READ_ONLY))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();

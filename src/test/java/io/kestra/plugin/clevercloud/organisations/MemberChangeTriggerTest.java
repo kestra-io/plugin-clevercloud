@@ -51,14 +51,14 @@ class MemberChangeTriggerTest {
     }
 
     private MemberChangeTrigger buildTrigger(MemberChangeTrigger.MemberEvent event) {
-        return MemberChangeTrigger.builder()
+        return TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .event(Property.ofValue(event))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
     }
 
@@ -296,14 +296,14 @@ class MemberChangeTriggerTest {
             .addHeader("Content-Type", "application/json")
             .setBody(MEMBER_A_JSON));
 
-        var trigger = MemberChangeTrigger.builder()
+        var trigger = TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_test"))
             .event(Property.ofValue(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var trigCtx = triggerContext();

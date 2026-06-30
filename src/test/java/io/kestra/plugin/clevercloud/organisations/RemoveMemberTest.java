@@ -37,13 +37,13 @@ class RemoveMemberTest {
         // CC API returns 200 with empty body on successful removal.
         mockServer.enqueue(new MockResponse().setResponseCode(200).setBody(""));
 
-        var task = RemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .userId(Property.ofValue("user_abc-001"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -58,13 +58,13 @@ class RemoveMemberTest {
     void sendsBearerAuthorizationHeader() throws Exception {
         mockServer.enqueue(new MockResponse().setResponseCode(200).setBody(""));
 
-        var task = RemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-auth-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_test"))
             .userId(Property.ofValue("user_abc-001"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -79,13 +79,13 @@ class RemoveMemberTest {
         // Some API versions return 204 No Content.
         mockServer.enqueue(new MockResponse().setResponseCode(204));
 
-        var task = RemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-204-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .userId(Property.ofValue("user_def-002"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();

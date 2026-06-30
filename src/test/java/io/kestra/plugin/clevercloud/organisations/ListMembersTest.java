@@ -2,7 +2,10 @@ package io.kestra.plugin.clevercloud.organisations;
 
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.serializers.FileSerde;
+import io.kestra.plugin.clevercloud.organisations.model.Member;
 import jakarta.inject.Inject;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -64,12 +67,12 @@ class ListMembersTest {
                 ]
                 """));
 
-        var task = ListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -98,12 +101,12 @@ class ListMembersTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-empty-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_empty"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -120,12 +123,12 @@ class ListMembersTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-auth-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -142,12 +145,12 @@ class ListMembersTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-url-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -155,5 +158,72 @@ class ListMembersTest {
 
         var request = mockServer.takeRequest();
         assertThat(request.getPath(), containsString("/organisations/orga_abc123/members"));
+    }
+
+    @Test
+    void fetchTypeFetchReturnsFullListInOutput() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {"member": {"id": "user_fetch-1"}, "role": "ADMIN"},
+                  {"member": {"id": "user_fetch-2"}, "role": "DEVELOPER"}
+                ]
+                """));
+
+        var task = TestableListMembers.builder()
+            .id("list-members-fetch-test")
+            .type(ListMembers.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .fetchType(Property.ofValue(FetchType.FETCH))
+            .testBaseUrl(mockServer.url("").toString())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getTotal(), is(2));
+        assertThat(output.getMembers(), hasSize(2));
+        assertThat(output.getMember(), is(nullValue()));
+        assertThat(output.getUri(), is(nullValue()));
+    }
+
+    @Test
+    void fetchTypeStoreWritesIonFileToInternalStorage() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {"member": {"id": "user_store-1"}, "role": "ADMIN"},
+                  {"member": {"id": "user_store-2"}, "role": "DEVELOPER"}
+                ]
+                """));
+
+        var task = TestableListMembers.builder()
+            .id("list-members-store-test")
+            .type(ListMembers.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .fetchType(Property.ofValue(FetchType.STORE))
+            .testBaseUrl(mockServer.url("").toString())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getTotal(), is(2));
+        assertThat(output.getUri(), is(notNullValue()));
+        assertThat(output.getMembers(), is(nullValue()));
+        assertThat(output.getMember(), is(nullValue()));
+
+        try (var reader = new java.io.InputStreamReader(runContext.storage().getFile(output.getUri()))) {
+            var stored = FileSerde.readAll(reader, Member.class).collectList().block();
+            assertThat(stored, hasSize(2));
+            assertThat(stored.get(0).getMember().getId(), is("user_store-1"));
+            assertThat(stored.get(1).getMember().getId(), is("user_store-2"));
+        }
     }
 }

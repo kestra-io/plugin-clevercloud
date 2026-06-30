@@ -60,12 +60,12 @@ class ListAddonsTest {
                 ]
                 """));
 
-        var task = ListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -93,12 +93,12 @@ class ListAddonsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-empty-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_empty"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -115,12 +115,12 @@ class ListAddonsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-auth-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -137,12 +137,12 @@ class ListAddonsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-org-path-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -159,11 +159,11 @@ class ListAddonsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-self-path-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();

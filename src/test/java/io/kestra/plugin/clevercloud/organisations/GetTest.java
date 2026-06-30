@@ -53,12 +53,12 @@ class GetTest {
                 }
                 """));
 
-        var task = Get.builder()
+        var task = TestableGet.builder()
             .id("get-org-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -82,12 +82,12 @@ class GetTest {
                 {"id":"orga_abc123","name":"Acme Corp","cleverEnterprise":false}
                 """));
 
-        var task = Get.builder()
+        var task = TestableGet.builder()
             .id("get-auth-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -106,12 +106,12 @@ class GetTest {
                 {"id":"orga_xyz789","name":"Test Org","cleverEnterprise":true}
                 """));
 
-        var task = Get.builder()
+        var task = TestableGet.builder()
             .id("get-org-path-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_xyz789"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -130,11 +130,11 @@ class GetTest {
                 {"id":"user_personal123","name":"Personal Account","cleverEnterprise":false}
                 """));
 
-        var task = Get.builder()
+        var task = TestableGet.builder()
             .id("get-self-path-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -154,12 +154,12 @@ class GetTest {
                 {"id":6017,"message":"This organisation is not allowed to perform this operation.","type":"error"}
                 """));
 
-        var task = Get.builder()
+        var task = TestableGet.builder()
             .id("get-403-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_xyz"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();

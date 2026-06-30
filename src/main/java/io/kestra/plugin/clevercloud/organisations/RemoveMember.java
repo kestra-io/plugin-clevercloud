@@ -73,7 +73,7 @@ public class RemoveMember extends AbstractCleverCloudConnection implements Runna
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
         var rUserId = runContext.render(userId).as(String.class).orElseThrow();
 
-        var url = baseUrl(runContext) + "/organisations/" + rOrgId + "/members/" + rUserId;
+        var url = baseUrl() + "/organisations/" + rOrgId + "/members/" + rUserId;
 
         logger.info("Removing member {} from organisation {}", rUserId, rOrgId);
         makeCall(runContext, buildDeleteRequest(url));

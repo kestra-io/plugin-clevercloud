@@ -42,7 +42,7 @@ Tasks for listing, fetching, and waiting on application deployments.
 
 **`io.kestra.plugin.clevercloud.deployments.List`**
 
-Lists the deployment history for an application. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted), `limit` (integer, caps the number of deployments returned, defaults to 50). Outputs: `deployments` (list of deployment objects), `total` (count).
+Lists the deployment history for an application. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted), `limit` (integer, caps the number of deployments returned, defaults to 50), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total` (count), plus `deployments` (FETCH), `deployment` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE).
 
 Each deployment object exposes: `uuid`, `state`, `action`, `cause`, `date` (epoch milliseconds string), `commit` (null for non-Git triggers).
 
@@ -64,7 +64,7 @@ Fetches organisation or personal account details. Optional: `organisationId` (de
 
 **`io.kestra.plugin.clevercloud.organisations.ListMembers`**
 
-Lists all members of an organisation. Requires `organisationId` (the /self/members endpoint does not exist). Outputs: `members` (list), `total`. Each member entry contains a `member` sub-object (`id`, `email`, `name`, `avatar`, `preferredMFA`) plus `role` and `job`.
+Lists all members of an organisation. Requires `organisationId` (the /self/members endpoint does not exist). Optional: `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `members` (FETCH), `member` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each member entry contains a `member` sub-object (`id`, `email`, `name`, `avatar`, `preferredMFA`) plus `role` and `job`.
 
 **`io.kestra.plugin.clevercloud.organisations.AddMember`**
 
@@ -76,11 +76,11 @@ Removes a user from the organisation. Requires `organisationId`, `userId`. Obtai
 
 **`io.kestra.plugin.clevercloud.organisations.ListApplications`**
 
-Lists all applications in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted). Outputs: `applications` (list), `total`. Each application entry contains: `id`, `name`, `description`, `zone`, `zoneId`, `instance` (with `type`, `version`, `variant.slug`).
+Lists all applications in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `applications` (FETCH), `application` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each application entry contains: `id`, `name`, `description`, `zone`, `zoneId`, `instance` (with `type`, `version`, `variant.slug`).
 
 **`io.kestra.plugin.clevercloud.organisations.ListAddons`**
 
-Lists all add-ons provisioned in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted). Outputs: `addons` (list), `total`. Each add-on entry contains: `id`, `name`, `realId`, `region`, `provider` (with `id`, `name`, `shortDesc`), `plan` (with `id`, `slug`, `name`).
+Lists all add-ons provisioned in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `addons` (FETCH), `addon` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each add-on entry contains: `id`, `name`, `realId`, `region`, `provider` (with `id`, `name`, `shortDesc`), `plan` (with `id`, `slug`, `name`).
 
 ## Triggers
 

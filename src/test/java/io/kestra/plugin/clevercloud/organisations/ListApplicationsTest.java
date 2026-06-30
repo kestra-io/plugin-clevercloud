@@ -75,12 +75,12 @@ class ListApplicationsTest {
                 ]
                 """));
 
-        var task = ListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -109,12 +109,12 @@ class ListApplicationsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-empty-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_empty"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -131,12 +131,12 @@ class ListApplicationsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-auth-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -153,12 +153,12 @@ class ListApplicationsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-org-path-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -175,11 +175,11 @@ class ListApplicationsTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = ListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-self-path-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
