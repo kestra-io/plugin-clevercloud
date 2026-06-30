@@ -120,7 +120,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         var rPollInterval = runContext.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(15));
         var rTimeout = runContext.render(timeout).as(Duration.class).orElse(Duration.ofMinutes(30));
 
-        var url = baseUrl(runContext)
+        var url = baseUrl()
             + "/" + resourceBase(rOrgId)
             + "/applications/" + rAppId
             + "/deployments/" + rDeployId;

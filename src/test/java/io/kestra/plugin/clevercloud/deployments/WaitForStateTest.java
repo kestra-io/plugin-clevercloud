@@ -46,7 +46,7 @@ class WaitForStateTest {
                 {"uuid":"deployment_d1","state":"OK","date":"1782127329927","action":"DEPLOY","commit":"abc123"}
                 """));
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-ok-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -56,7 +56,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -75,7 +75,7 @@ class WaitForStateTest {
                 {"uuid":"deployment_d2","state":"FAIL","date":"1782127329927","action":"DEPLOY","commit":"bad1234"}
                 """));
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-fail-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -85,7 +85,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -103,7 +103,7 @@ class WaitForStateTest {
                 {"uuid":"deployment_d5","state":"CANCELLED","date":"1782127287203","action":"DEPLOY","commit":"abc"}
                 """));
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-cancelled-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -113,7 +113,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -137,7 +137,7 @@ class WaitForStateTest {
                 {"uuid":"deployment_d3","state":"OK","date":"1782127287203","action":"DEPLOY","commit":"poll0001"}
                 """));
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-poll-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -147,7 +147,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(50)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -168,7 +168,7 @@ class WaitForStateTest {
                     """));
         }
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-timeout-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -178,7 +178,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofMillis(50)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -193,7 +193,7 @@ class WaitForStateTest {
             .addHeader("Content-Type", "application/json")
             .setBody("{\"error\":\"super-secret-internal-error\",\"token\":\"leaked-value\"}"));
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-500-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -203,7 +203,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -222,7 +222,7 @@ class WaitForStateTest {
                 {"uuid":"deployment_d7","state":"OK","date":"1782127329927","action":"DEPLOY","commit":"abc"}
                 """));
 
-        var task = WaitForState.builder()
+        var task = TestableWaitForState.builder()
             .id("wait-self-test")
             .type(WaitForState.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -231,7 +231,7 @@ class WaitForStateTest {
             .targetState(Property.ofValue(DeploymentState.OK))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();

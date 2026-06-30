@@ -3,7 +3,10 @@ package io.kestra.plugin.clevercloud.deployments;
 import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.serializers.FileSerde;
+import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import jakarta.inject.Inject;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -60,13 +63,13 @@ class ListTest {
                 ]
                 """));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -90,13 +93,13 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-default-limit-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -113,14 +116,14 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-limit-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .limit(Property.ofValue(5))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -137,13 +140,13 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-empty-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -160,13 +163,13 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("{\"error\":\"super-secret-internal-error\",\"token\":\"leaked-value\"}"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-500-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -183,12 +186,12 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-auth-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .applicationId(Property.ofValue("app_test"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -205,13 +208,13 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-org-path-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_myorg"))
             .applicationId(Property.ofValue("app_myapp"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -228,12 +231,12 @@ class ListTest {
             .addHeader("Content-Type", "application/json")
             .setBody("[]"));
 
-        var task = List.builder()
+        var task = TestableList.builder()
             .id("list-self-path-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_myapp"))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
 
         var runContext = runContextFactory.of();
@@ -242,5 +245,132 @@ class ListTest {
         var request = mockServer.takeRequest();
         assertThat(request.getPath(), containsString("/self/applications/app_myapp/deployments"));
         assertThat(request.getPath(), not(containsString("/organisations/")));
+    }
+
+    @Test
+    void fetchTypeFetchReturnsFullListInOutput() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {"uuid": "deployment_fetch-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"},
+                  {"uuid": "deployment_fetch-2", "state": "WIP", "date": "1782127287203", "action": "DEPLOY"}
+                ]
+                """));
+
+        var task = TestableList.builder()
+            .id("list-fetch-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_test"))
+            .fetchType(Property.ofValue(FetchType.FETCH))
+            .testBaseUrl(mockServer.url("").toString())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getTotal(), is(2));
+        assertThat(output.getDeployments(), hasSize(2));
+        assertThat(output.getDeployment(), is(nullValue()));
+        assertThat(output.getUri(), is(nullValue()));
+    }
+
+    @Test
+    void fetchTypeFetchOneReturnsFirstDeployment() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {"uuid": "deployment_one-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"},
+                  {"uuid": "deployment_one-2", "state": "WIP", "date": "1782127287203", "action": "DEPLOY"}
+                ]
+                """));
+
+        var task = TestableList.builder()
+            .id("list-fetch-one-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_test"))
+            .fetchType(Property.ofValue(FetchType.FETCH_ONE))
+            .testBaseUrl(mockServer.url("").toString())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getTotal(), is(2));
+        assertThat(output.getDeployment(), is(notNullValue()));
+        assertThat(output.getDeployment().getUuid(), is("deployment_one-1"));
+        assertThat(output.getDeployments(), is(nullValue()));
+        assertThat(output.getUri(), is(nullValue()));
+    }
+
+    @Test
+    void fetchTypeStoreWritesIonFileToInternalStorage() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {"uuid": "deployment_store-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"},
+                  {"uuid": "deployment_store-2", "state": "WIP", "date": "1782127287203", "action": "DEPLOY"}
+                ]
+                """));
+
+        var task = TestableList.builder()
+            .id("list-store-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_test"))
+            .fetchType(Property.ofValue(FetchType.STORE))
+            .testBaseUrl(mockServer.url("").toString())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getTotal(), is(2));
+        assertThat(output.getUri(), is(notNullValue()));
+        assertThat(output.getDeployments(), is(nullValue()));
+        assertThat(output.getDeployment(), is(nullValue()));
+
+        try (var reader = new java.io.InputStreamReader(runContext.storage().getFile(output.getUri()))) {
+            var stored = FileSerde.readAll(reader, Deployment.class).collectList().block();
+            assertThat(stored, hasSize(2));
+            assertThat(stored.get(0).getUuid(), is("deployment_store-1"));
+            assertThat(stored.get(1).getUuid(), is("deployment_store-2"));
+        }
+    }
+
+    @Test
+    void fetchTypeNoneReturnsOnlyCount() throws Exception {
+        mockServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .addHeader("Content-Type", "application/json")
+            .setBody("""
+                [
+                  {"uuid": "deployment_none-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"}
+                ]
+                """));
+
+        var task = TestableList.builder()
+            .id("list-none-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .applicationId(Property.ofValue("app_test"))
+            .fetchType(Property.ofValue(FetchType.NONE))
+            .testBaseUrl(mockServer.url("").toString())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getTotal(), is(1));
+        assertThat(output.getDeployments(), is(nullValue()));
+        assertThat(output.getDeployment(), is(nullValue()));
+        assertThat(output.getUri(), is(nullValue()));
     }
 }

@@ -6,7 +6,9 @@ import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,7 +18,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
+import reactor.core.publisher.Flux;
 
+import java.io.FileWriter;
+import java.net.URI;
 import java.util.ArrayList;
 
 @SuperBuilder
@@ -29,7 +34,7 @@ import java.util.ArrayList;
     description = """
         Retrieves the deployment history for a given application.
         When organisationId is omitted, the personal account endpoint (/self) is used.
-        Returns a list of deployment objects and the total count.
+        Use fetchType to control how the deployments are exposed in the output.
         """
 )
 @Plugin(
@@ -88,6 +93,11 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
     @Builder.Default
     private Property<Integer> limit = Property.ofValue(50);
 
+    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ion file and returns its uri, NONE returns nothing but the count")
+    @PluginProperty(group = "processing")
+    @Builder.Default
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
@@ -97,7 +107,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
             () -> new IllegalArgumentException("applicationId is required")
         );
 
-        var urlBuilder = new StringBuilder(baseUrl(runContext))
+        var urlBuilder = new StringBuilder(baseUrl())
             .append("/").append(resourceBase(rOrgId))
             .append("/applications/").append(rAppId)
             .append("/deployments");
@@ -109,18 +119,42 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
         var deployments = MAPPER.readValue(body, new TypeReference<ArrayList<Deployment>>() {});
 
         logger.info("Found {} deployments", deployments.size());
-        return Output.builder()
-            .deployments(deployments)
-            .total(deployments.size())
-            .build();
+
+        var outputBuilder = Output.builder().total(deployments.size());
+
+        switch (runContext.render(fetchType).as(FetchType.class).orElseThrow()) {
+            case FETCH -> outputBuilder.deployments(deployments);
+            case FETCH_ONE -> outputBuilder.deployment(deployments.isEmpty() ? null : deployments.getFirst());
+            case STORE -> outputBuilder.uri(store(runContext, deployments));
+            case NONE -> {
+            }
+        }
+
+        return outputBuilder.build();
+    }
+
+    private URI store(RunContext runContext, java.util.List<Deployment> deployments) throws Exception {
+        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
+
+        try (var writer = new FileWriter(tempFile)) {
+            FileSerde.writeAll(writer, Flux.fromIterable(deployments)).block();
+        }
+
+        return runContext.storage().putFile(tempFile);
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "List of deployments returned by the API")
+        @Schema(title = "List of deployments returned by the API", description = "Populated when fetchType is FETCH")
         private final java.util.List<Deployment> deployments;
+
+        @Schema(title = "First deployment returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no deployment was found")
+        private final Deployment deployment;
+
+        @Schema(title = "URI of the stored deployments", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage")
+        private final URI uri;
 
         @Schema(title = "Total number of deployments returned")
         private final int total;

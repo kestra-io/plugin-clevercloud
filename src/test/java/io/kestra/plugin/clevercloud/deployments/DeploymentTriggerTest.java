@@ -49,7 +49,7 @@ class DeploymentTriggerTest {
     }
 
     private DeploymentTrigger buildTrigger() {
-        return DeploymentTrigger.builder()
+        return TestableDeploymentTrigger.builder()
             .id("trigger-test")
             .type(DeploymentTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -57,19 +57,19 @@ class DeploymentTriggerTest {
             .applicationId(Property.ofValue("app_test"))
             .targetState(Property.ofValue(DeploymentState.OK))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
     }
 
     private DeploymentTrigger buildTriggerWithoutOrg() {
-        return DeploymentTrigger.builder()
+        return TestableDeploymentTrigger.builder()
             .id("trigger-self-test")
             .type(DeploymentTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_personal"))
             .targetState(Property.ofValue(DeploymentState.OK))
             .interval(Duration.ofMinutes(1))
-            .apiBaseUrl(Property.ofValue(mockServer.url("").toString()))
+            .testBaseUrl(mockServer.url("").toString())
             .build();
     }
 

@@ -41,16 +41,8 @@ public abstract class AbstractCleverCloudConnection extends Task {
     @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
     HttpConfiguration options;
 
-    @Schema(title = "Override the Clever Cloud API base URL", description = "Used in tests to point at a mock server. Do not set in production flows.")
-    @PluginProperty(group = "advanced", hidden = true)
-    private Property<String> apiBaseUrl;
-
-    protected String baseUrl(RunContext runContext) throws Exception {
-        var override = System.getProperty("clevercloud.api.base.url");
-        String raw = override != null
-            ? override
-            : runContext.render(apiBaseUrl).as(String.class).orElse(DEFAULT_BASE_URL);
-        return raw.endsWith("/") ? raw.substring(0, raw.length() - 1) : raw;
+    protected String baseUrl() {
+        return DEFAULT_BASE_URL;
     }
 
     /**
