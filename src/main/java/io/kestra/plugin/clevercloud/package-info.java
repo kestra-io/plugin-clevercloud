@@ -1,7 +1,7 @@
 @PluginSubGroup(
     title = "Clevercloud",
     description = "Clevercloud plugin for Kestra",
-    categories = PluginSubGroup.PluginCategory.DATA
+    categories = PluginSubGroup.PluginCategory.CLOUD
 )
 package io.kestra.plugin.clevercloud;
 
