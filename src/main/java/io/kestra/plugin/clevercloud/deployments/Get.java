@@ -17,6 +17,8 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.time.Instant;
+
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -26,7 +28,7 @@ import lombok.experimental.SuperBuilder;
     title = "Get details of a specific Clever Cloud deployment",
     description = """
         Retrieves a single deployment by its ID. Returns the deployment state, action,
-        cause, date (epoch milliseconds), and the git commit SHA when available.
+        cause, date, and the git commit SHA when available.
         Terminal states are OK (success), FAIL (error), and CANCELLED.
         When organisationId is omitted, the personal account endpoint (/self) is used.
         """
@@ -130,8 +132,8 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         @Schema(title = "Deployment trigger cause, e.g. Git, API, Console")
         private final String cause;
 
-        @Schema(title = "Deployment timestamp as epoch milliseconds string")
-        private final String date;
+        @Schema(title = "Deployment timestamp")
+        private final Instant date;
 
         @Schema(title = "Git commit SHA associated with this deployment, null for non-Git deploys")
         private final String commit;

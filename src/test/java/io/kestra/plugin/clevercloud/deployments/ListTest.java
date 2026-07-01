@@ -12,6 +12,8 @@ import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -65,7 +67,7 @@ class ListTest {
         assertThat(output.getDeployments().getFirst().getUuid(), is("deployment_abc123"));
         assertThat(output.getDeployments().getFirst().getState(), is("OK"));
         assertThat(output.getDeployments().getFirst().getCommit(), is("abc1234"));
-        assertThat(output.getDeployments().getFirst().getDate(), is("1782127329927"));
+        assertThat(output.getDeployments().getFirst().getDate(), is(Instant.ofEpochMilli(1782127329927L)));
         assertThat(output.getDeployments().getFirst().getAction(), is("DEPLOY"));
         assertThat(output.getDeployments().get(1).getUuid(), is("deployment_def456"));
         assertThat(output.getDeployments().get(1).getState(), is("WIP"));

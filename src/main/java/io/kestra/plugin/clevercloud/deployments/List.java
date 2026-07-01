@@ -20,8 +20,9 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 import reactor.core.publisher.Flux;
 
-import java.io.FileWriter;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 
 @SuperBuilder
@@ -87,7 +88,11 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
 
     @Schema(
         title = "Maximum number of deployments to return",
-        description = "Defaults to 50. Set to a higher value to retrieve more history."
+        description = """
+            Defaults to 50. Set to a higher value to retrieve more history.
+            A large value combined with fetchType FETCH materializes the full history in the task
+            output, which can be memory-intensive. Prefer fetchType STORE for large result sets.
+            """
     )
     @PluginProperty(group = "processing")
     @Builder.Default
@@ -135,7 +140,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
     private URI store(RunContext runContext, java.util.List<Deployment> deployments) throws Exception {
         var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
 
-        try (var writer = new FileWriter(tempFile)) {
+        try (var writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
             FileSerde.writeAll(writer, Flux.fromIterable(deployments)).block();
         }
 

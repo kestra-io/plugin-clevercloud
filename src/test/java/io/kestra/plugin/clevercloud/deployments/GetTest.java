@@ -8,6 +8,8 @@ import io.kestra.core.runners.RunContextFactory;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -49,7 +51,7 @@ class GetTest {
         assertThat(output.getDeploymentId(), is("deployment_5ea89906-3651-4ffc-989a-bf54db93a9c8"));
         assertThat(output.getState(), is("OK"));
         assertThat(output.getCommit(), is("cafe0001"));
-        assertThat(output.getDate(), is("1782127329927"));
+        assertThat(output.getDate(), is(Instant.ofEpochMilli(1782127329927L)));
         assertThat(output.getAction(), is("DEPLOY"));
         assertThat(output.getCause(), is("Git"));
     }

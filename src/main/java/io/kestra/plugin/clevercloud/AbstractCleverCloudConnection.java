@@ -62,11 +62,35 @@ public abstract class AbstractCleverCloudConnection extends Task {
     }
 
     public String makeCall(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder) throws Exception {
+        try {
+            var rToken = renderApiToken(runContext);
+            var body = makeCall(runContext, options, requestBuilder, rToken, String.class);
+            return body != null ? body : "";
+        } catch (IllegalVariableEvaluationException e) {
+            runContext.logger().error("Failed to render apiToken: {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Shared HTTP call logic: builds the client, adds the Bearer auth header, executes the request,
+     * and on a non-2xx response wraps the failure into a body-free {@link HttpClientResponseException}
+     * so secrets or sensitive API error payloads are never leaked into task/trigger logs or outputs.
+     */
+    public static <T> T makeCall(
+        RunContext runContext,
+        HttpConfiguration options,
+        HttpRequest.HttpRequestBuilder requestBuilder,
+        String apiToken,
+        Class<T> responseType
+    ) throws Exception {
         var logger = runContext.logger();
         try (var client = new HttpClient(runContext, options)) {
-            addAuthHeader(runContext, requestBuilder);
-            var response = client.request(requestBuilder.build(), String.class);
-            return response.getBody() != null ? response.getBody() : "";
+            requestBuilder
+                .addHeader("Authorization", "Bearer " + apiToken)
+                .addHeader("Content-Type", JSON_CONTENT_TYPE);
+            var response = client.request(requestBuilder.build(), responseType);
+            return response.getBody();
         } catch (HttpClientResponseException e) {
             var status = e.getResponse() != null ? e.getResponse().getStatus().getCode() : -1;
             var method = "request";
@@ -82,10 +106,13 @@ public abstract class AbstractCleverCloudConnection extends Task {
                 e.getResponse(),
                 e
             );
-        } catch (IllegalVariableEvaluationException e) {
-            logger.error("Failed to render apiToken: {}", e.getMessage());
-            throw e;
         }
+    }
+
+    public String renderApiToken(RunContext runContext) throws IllegalVariableEvaluationException {
+        return runContext.render(apiToken).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("apiToken is required")
+        );
     }
 
     protected HttpRequest.HttpRequestBuilder buildGetRequest(String url) {
@@ -106,15 +133,5 @@ public abstract class AbstractCleverCloudConnection extends Task {
         return HttpRequest.builder()
             .uri(URI.create(url))
             .method("DELETE");
-    }
-
-    private void addAuthHeader(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder)
-        throws IllegalVariableEvaluationException {
-        var rToken = runContext.render(apiToken).as(String.class).orElseThrow(
-            () -> new IllegalArgumentException("apiToken is required")
-        );
-        requestBuilder
-            .addHeader("Authorization", "Bearer " + rToken)
-            .addHeader("Content-Type", JSON_CONTENT_TYPE);
     }
 }

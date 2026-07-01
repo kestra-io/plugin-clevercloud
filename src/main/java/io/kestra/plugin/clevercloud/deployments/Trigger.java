@@ -2,8 +2,6 @@ package io.kestra.plugin.clevercloud.deployments;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.kestra.core.http.HttpRequest;
-import io.kestra.core.http.client.HttpClient;
-import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -188,46 +186,37 @@ public class Trigger extends AbstractTrigger
 
         logger.debug("Polling deployments for application {}", rAppId);
 
-        String body;
-        try (var client = new HttpClient(runContext, options)) {
-            var request = HttpRequest.builder()
-                .uri(URI.create(url))
-                .method("GET")
-                .addHeader("Authorization", "Bearer " + rApiToken)
-                .addHeader("Content-Type", "application/json; charset=UTF-8")
-                .build();
-            var response = client.request(request, String.class);
-            body = response.getBody() != null ? response.getBody() : "[]";
-        } catch (HttpClientResponseException e) {
-            var status = e.getResponse() != null ? e.getResponse().getStatus().getCode() : -1;
-            logger.debug("Clever Cloud API returned {} on GET {}", status, url);
-            throw new HttpClientResponseException(
-                "Clever Cloud API error " + status + " polling deployments for " + rAppId
-                    + ": check apiToken and that the application exists",
-                e.getResponse(),
-                e
-            );
-        }
+        var requestBuilder = HttpRequest.builder()
+            .uri(URI.create(url))
+            .method("GET");
+        var body = AbstractCleverCloudConnection.makeCall(runContext, options, requestBuilder, rApiToken, String.class);
 
         var deployments = AbstractCleverCloudConnection.MAPPER.readValue(
-            body, new TypeReference<ArrayList<Deployment>>() {});
+            body != null ? body : "[]", new TypeReference<ArrayList<Deployment>>() {});
 
         // Timestamp-based dedup: only consider DEPLOY records that started after the last evaluation.
         // context.getDate() is the ZonedDateTime of the previous evaluation (always present).
         // UNDEPLOY records (scaling, moderation) are excluded so the trigger only fires on code deploys.
         Instant cutoff = context.getDate().toInstant();
 
-        var matched = deployments.stream()
+        var matches = deployments.stream()
             .filter(d -> "DEPLOY".equals(d.getAction()))
             .filter(d -> rTargetState.name().equals(d.getState()))
             .filter(d -> isAfterCutoff(d.getDate(), cutoff))
-            .findFirst();
+            .toList();
 
-        if (matched.isEmpty()) {
+        if (matches.isEmpty()) {
             return Optional.empty();
         }
 
-        var deployment = matched.get();
+        if (matches.size() > 1) {
+            logger.warn(
+                "Found {} new deployments matching target state {} in this poll, only the most recent will fire the trigger, the others are skipped",
+                matches.size(), rTargetState
+            );
+        }
+
+        var deployment = matches.getFirst();
         logger.info("Deployment {} reached target state {}", deployment.getUuid(), rTargetState);
 
         var output = Output.builder()
@@ -240,19 +229,11 @@ public class Trigger extends AbstractTrigger
     }
 
     /**
-     * Returns true when the deployment's date (epoch milliseconds string) is strictly after the cutoff.
-     * Returns false when the date is absent or unparseable so we skip rather than re-fire.
+     * Returns true when the deployment's date is strictly after the cutoff.
+     * Returns false when the date is absent so we skip rather than re-fire.
      */
-    private static boolean isAfterCutoff(String epochMillisStr, Instant cutoff) {
-        if (epochMillisStr == null || epochMillisStr.isBlank()) {
-            return false;
-        }
-        try {
-            var deploymentInstant = Instant.ofEpochMilli(Long.parseLong(epochMillisStr));
-            return deploymentInstant.isAfter(cutoff);
-        } catch (Exception e) {
-            return false;
-        }
+    private static boolean isAfterCutoff(Instant deploymentDate, Instant cutoff) {
+        return deploymentDate != null && deploymentDate.isAfter(cutoff);
     }
 
     @Builder
