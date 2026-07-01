@@ -1,5 +1,7 @@
 package io.kestra.plugin.clevercloud.deployments;
 
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
@@ -11,10 +13,6 @@ import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.runners.RunContextInitializer;
 import io.kestra.plugin.clevercloud.deployments.model.DeploymentState;
 import jakarta.inject.Inject;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -22,11 +20,12 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.*;
 
 @KestraTest
+@WireMockTest
 class TriggerTest {
 
     @Inject
@@ -35,20 +34,7 @@ class TriggerTest {
     @Inject
     RunContextInitializer runContextInitializer;
 
-    MockWebServer mockServer;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        mockServer = new MockWebServer();
-        mockServer.start();
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        mockServer.shutdown();
-    }
-
-    private Trigger buildTrigger() {
+    private Trigger buildTrigger(String baseUrl) {
         return TestableTrigger.builder()
             .id("trigger-test")
             .type(Trigger.class.getName())
@@ -57,11 +43,11 @@ class TriggerTest {
             .applicationId(Property.ofValue("app_test"))
             .targetState(Property.ofValue(DeploymentState.OK))
             .interval(Duration.ofMinutes(1))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(baseUrl)
             .build();
     }
 
-    private Trigger buildTriggerWithoutOrg() {
+    private Trigger buildTriggerWithoutOrg(String baseUrl) {
         return TestableTrigger.builder()
             .id("trigger-self-test")
             .type(Trigger.class.getName())
@@ -69,7 +55,7 @@ class TriggerTest {
             .applicationId(Property.ofValue("app_personal"))
             .targetState(Property.ofValue(DeploymentState.OK))
             .interval(Duration.ofMinutes(1))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(baseUrl)
             .build();
     }
 
@@ -96,14 +82,12 @@ class TriggerTest {
     }
 
     @Test
-    void firesWhenNewDeploymentMatchesTargetState() throws Exception {
+    void firesWhenNewDeploymentMatchesTargetState(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var deploymentEpochMillis = Instant.now().minusSeconds(300).toEpochMilli();
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_new-001",
@@ -114,9 +98,9 @@ class TriggerTest {
                     "cause": "Git"
                   }
                 ]
-                """.formatted(deploymentEpochMillis)));
+                """.formatted(deploymentEpochMillis))));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -124,18 +108,16 @@ class TriggerTest {
 
         assertThat(result.isPresent(), is(true));
         assertThat(result.get(), notNullValue());
-        assertThat(mockServer.getRequestCount(), is(1));
+        verify(1, getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments")));
     }
 
     @Test
-    void doesNotRefireOnAlreadySeenDeployment() throws Exception {
+    void doesNotRefireOnAlreadySeenDeployment(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(5);
         var oldDeploymentEpochMillis = Instant.now().minusSeconds(900).toEpochMilli();
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_old-002",
@@ -146,9 +128,9 @@ class TriggerTest {
                     "cause": "Git"
                   }
                 ]
-                """.formatted(oldDeploymentEpochMillis)));
+                """.formatted(oldDeploymentEpochMillis))));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -158,14 +140,12 @@ class TriggerTest {
     }
 
     @Test
-    void doesNotFireWhenNoDeploymentMatchesTargetState() throws Exception {
+    void doesNotFireWhenNoDeploymentMatchesTargetState(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var deploymentEpochMillis = Instant.now().minusSeconds(120).toEpochMilli();
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_wip-003",
@@ -176,9 +156,9 @@ class TriggerTest {
                     "cause": "Git"
                   }
                 ]
-                """.formatted(deploymentEpochMillis)));
+                """.formatted(deploymentEpochMillis))));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -188,13 +168,11 @@ class TriggerTest {
     }
 
     @Test
-    void doesNotFireOnDeploymentWithMissingDate() throws Exception {
+    void doesNotFireOnDeploymentWithMissingDate(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_nodate-004",
@@ -204,9 +182,9 @@ class TriggerTest {
                     "cause": "Git"
                   }
                 ]
-                """));
+                """)));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -216,14 +194,12 @@ class TriggerTest {
     }
 
     @Test
-    void doesNotFireOnUndeployRecord() throws Exception {
+    void doesNotFireOnUndeployRecord(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var deploymentEpochMillis = Instant.now().minusSeconds(60).toEpochMilli();
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_undeploy-005",
@@ -233,9 +209,9 @@ class TriggerTest {
                     "cause": "Killed/Moderated"
                   }
                 ]
-                """.formatted(deploymentEpochMillis)));
+                """.formatted(deploymentEpochMillis))));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -245,15 +221,13 @@ class TriggerTest {
     }
 
     @Test
-    void firesOnlyOnceWhenMultipleDeploymentsMatch() throws Exception {
+    void firesOnlyOnceWhenMultipleDeploymentsMatch(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
         var epoch1 = Instant.now().minusSeconds(120).toEpochMilli();
         var epoch2 = Instant.now().minusSeconds(60).toEpochMilli();
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_multi-006",
@@ -272,47 +246,43 @@ class TriggerTest {
                     "cause": "Git"
                   }
                 ]
-                """.formatted(epoch1, epoch2)));
+                """.formatted(epoch1, epoch2))));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
         assertThat("trigger must fire when at least one deployment matches", result.isPresent(), is(true));
-        assertThat(mockServer.getRequestCount(), is(1));
+        verify(1, getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments")));
     }
 
     @Test
-    void sendsBearerAuthorizationHeader() throws Exception {
+    void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("[]")));
 
-        var trigger = buildTrigger();
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext(lastPoll);
         var condCtx = conditionContext(trigger, trigCtx);
 
         trigger.evaluate(condCtx, trigCtx);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getHeader("Authorization"), is("Bearer test-api-token"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .withHeader("Authorization", equalTo("Bearer test-api-token")));
     }
 
     @Test
-    void usesSelfPathWhenOrgIdOmitted() throws Exception {
+    void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
 
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+        stubFor(get(urlPathEqualTo("/self/applications/app_personal/deployments"))
+            .willReturn(okJson("[]")));
 
-        var trigger = buildTriggerWithoutOrg();
+        var trigger = buildTriggerWithoutOrg(wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = TriggerContext.builder()
             .namespace("company.team")
             .flowId("test-flow")
@@ -323,8 +293,7 @@ class TriggerTest {
 
         trigger.evaluate(condCtx, trigCtx);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getPath(), org.hamcrest.Matchers.containsString("/self/applications/app_personal/deployments"));
-        assertThat(request.getPath(), org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("/organisations/")));
+        verify(getRequestedFor(urlPathEqualTo("/self/applications/app_personal/deployments")));
+        verify(0, getRequestedFor(urlPathMatching("/organisations/.*")));
     }
 }

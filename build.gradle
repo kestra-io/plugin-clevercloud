@@ -59,17 +59,6 @@ dependencies {
  **********************************************************************************************************************/
 test {
     useJUnitPlatform()
-    // Pass Clever Cloud integration test credentials from the environment when present.
-    // The integration tests guard themselves with @EnabledIfEnvironmentVariable so these are
-    // ignored when the vars are absent.
-    [
-        "CLEVER_API_TOKEN",
-        "CLEVER_ORG_ID",
-        "CLEVER_APP_ID"
-    ].each { key ->
-        def val = System.getenv(key)
-        if (val) environment key, val
-    }
 }
 
 testlogger {
@@ -109,7 +98,7 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter-engine"
     testImplementation "org.hamcrest:hamcrest"
     testImplementation "org.hamcrest:hamcrest-library"
-    testImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
+    testImplementation "org.wiremock:wiremock-jetty12"
 }
 
 /**********************************************************************************************************************\

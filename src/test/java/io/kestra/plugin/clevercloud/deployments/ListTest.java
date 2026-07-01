@@ -1,5 +1,7 @@
 package io.kestra.plugin.clevercloud.deployments;
 
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
@@ -8,41 +10,24 @@ import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.deployments.model.Deployment;
 import jakarta.inject.Inject;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @KestraTest
+@WireMockTest
 class ListTest {
 
     @Inject
     RunContextFactory runContextFactory;
 
-    MockWebServer mockServer;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        mockServer = new MockWebServer();
-        mockServer.start();
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        mockServer.shutdown();
-    }
-
     @Test
-    void parseDeploymentListResponse() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void parseDeploymentListResponse(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {
                     "uuid": "deployment_abc123",
@@ -61,7 +46,7 @@ class ListTest {
                     "cause": "Git"
                   }
                 ]
-                """));
+                """)));
 
         var task = TestableList.builder()
             .id("list-test")
@@ -69,7 +54,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -87,11 +72,9 @@ class ListTest {
     }
 
     @Test
-    void appliesDefaultLimitParameter() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void appliesDefaultLimitParameter(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("[]")));
 
         var task = TestableList.builder()
             .id("list-default-limit-test")
@@ -99,22 +82,20 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getPath(), containsString("limit=50"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .withQueryParam("limit", equalTo("50")));
     }
 
     @Test
-    void applyCustomLimitParameter() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void applyCustomLimitParameter(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("[]")));
 
         var task = TestableList.builder()
             .id("list-limit-test")
@@ -123,22 +104,20 @@ class ListTest {
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
             .limit(Property.ofValue(5))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getPath(), containsString("limit=5"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .withQueryParam("limit", equalTo("5")));
     }
 
     @Test
-    void handleEmptyDeploymentList() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void handleEmptyDeploymentList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(okJson("[]")));
 
         var task = TestableList.builder()
             .id("list-empty-test")
@@ -146,7 +125,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -157,11 +136,11 @@ class ListTest {
     }
 
     @Test
-    void throwsCleanExceptionOn500WithoutBodyLeak() {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(500)
-            .addHeader("Content-Type", "application/json")
-            .setBody("{\"error\":\"super-secret-internal-error\",\"token\":\"leaked-value\"}"));
+    void throwsCleanExceptionOn500WithoutBodyLeak(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments"))
+            .willReturn(aResponse().withStatus(500)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"error\":\"super-secret-internal-error\",\"token\":\"leaked-value\"}")));
 
         var task = TestableList.builder()
             .id("list-500-test")
@@ -169,7 +148,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -180,33 +159,29 @@ class ListTest {
     }
 
     @Test
-    void sendsBearerAuthorizationHeader() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/self/applications/app_test/deployments"))
+            .willReturn(okJson("[]")));
 
         var task = TestableList.builder()
             .id("list-auth-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .applicationId(Property.ofValue("app_test"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+        verify(getRequestedFor(urlPathEqualTo("/self/applications/app_test/deployments"))
+            .withHeader("Authorization", equalTo("Bearer my-secret-token")));
     }
 
     @Test
-    void usesOrganisationPathWhenOrgIdProvided() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void usesOrganisationPathWhenOrgIdProvided(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_myorg/applications/app_myapp/deployments"))
+            .willReturn(okJson("[]")));
 
         var task = TestableList.builder()
             .id("list-org-path-test")
@@ -214,50 +189,44 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_myorg"))
             .applicationId(Property.ofValue("app_myapp"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getPath(), containsString("/organisations/orga_myorg/applications/app_myapp/deployments"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_myorg/applications/app_myapp/deployments")));
     }
 
     @Test
-    void usesSelfPathWhenOrgIdOmitted() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/self/applications/app_myapp/deployments"))
+            .willReturn(okJson("[]")));
 
         var task = TestableList.builder()
             .id("list-self-path-test")
             .type(List.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_myapp"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getPath(), containsString("/self/applications/app_myapp/deployments"));
-        assertThat(request.getPath(), not(containsString("/organisations/")));
+        verify(getRequestedFor(urlPathEqualTo("/self/applications/app_myapp/deployments")));
+        verify(0, getRequestedFor(urlPathMatching("/organisations/.*")));
     }
 
     @Test
-    void fetchTypeFetchReturnsFullListInOutput() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void fetchTypeFetchReturnsFullListInOutput(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/self/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {"uuid": "deployment_fetch-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"},
                   {"uuid": "deployment_fetch-2", "state": "WIP", "date": "1782127287203", "action": "DEPLOY"}
                 ]
-                """));
+                """)));
 
         var task = TestableList.builder()
             .id("list-fetch-test")
@@ -265,7 +234,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_test"))
             .fetchType(Property.ofValue(FetchType.FETCH))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -278,16 +247,14 @@ class ListTest {
     }
 
     @Test
-    void fetchTypeFetchOneReturnsFirstDeployment() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void fetchTypeFetchOneReturnsFirstDeployment(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/self/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {"uuid": "deployment_one-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"},
                   {"uuid": "deployment_one-2", "state": "WIP", "date": "1782127287203", "action": "DEPLOY"}
                 ]
-                """));
+                """)));
 
         var task = TestableList.builder()
             .id("list-fetch-one-test")
@@ -295,7 +262,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_test"))
             .fetchType(Property.ofValue(FetchType.FETCH_ONE))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -309,16 +276,14 @@ class ListTest {
     }
 
     @Test
-    void fetchTypeStoreWritesIonFileToInternalStorage() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void fetchTypeStoreWritesIonFileToInternalStorage(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/self/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {"uuid": "deployment_store-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"},
                   {"uuid": "deployment_store-2", "state": "WIP", "date": "1782127287203", "action": "DEPLOY"}
                 ]
-                """));
+                """)));
 
         var task = TestableList.builder()
             .id("list-store-test")
@@ -326,7 +291,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_test"))
             .fetchType(Property.ofValue(FetchType.STORE))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -346,15 +311,13 @@ class ListTest {
     }
 
     @Test
-    void fetchTypeNoneReturnsOnlyCount() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void fetchTypeNoneReturnsOnlyCount(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/self/applications/app_test/deployments"))
+            .willReturn(okJson("""
                 [
                   {"uuid": "deployment_none-1", "state": "OK", "date": "1782127329927", "action": "DEPLOY"}
                 ]
-                """));
+                """)));
 
         var task = TestableList.builder()
             .id("list-none-test")
@@ -362,7 +325,7 @@ class ListTest {
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_test"))
             .fetchType(Property.ofValue(FetchType.NONE))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
