@@ -89,7 +89,7 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
         var logger = runContext.logger();
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
-        var url = baseUrl() + "/" + resourceBase(rOrgId) + "/applications";
+        var url = join(baseUrl(), resourceBase(rOrgId)) + "/applications";
 
         logger.info("Listing applications for {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
         var body = makeCall(runContext, buildGetRequest(url));

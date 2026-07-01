@@ -55,11 +55,12 @@ plugin-clevercloud/
 │   ├── deployments/
 │   │   ├── package-info.java
 │   │   ├── model/
-│   │   │   └── Deployment.java
+│   │   │   ├── Deployment.java
+│   │   │   └── DeploymentState.java
 │   │   ├── List.java
 │   │   ├── Get.java
 │   │   ├── WaitForState.java
-│   │   └── DeploymentTrigger.java
+│   │   └── Trigger.java
 │   └── organisations/
 │       ├── package-info.java
 │       ├── model/
@@ -79,8 +80,7 @@ plugin-clevercloud/
 │   │   ├── ListTest.java
 │   │   ├── GetTest.java
 │   │   ├── WaitForStateTest.java
-│   │   ├── DeploymentTriggerTest.java
-│   │   └── DeploymentsIntegrationTest.java
+│   │   └── TriggerTest.java
 │   └── organisations/
 │       ├── GetTest.java
 │       ├── ListMembersTest.java
@@ -88,8 +88,7 @@ plugin-clevercloud/
 │       ├── RemoveMemberTest.java
 │       ├── ListApplicationsTest.java
 │       ├── ListAddonsTest.java
-│       ├── MemberChangeTriggerTest.java
-│       └── OrganisationsIntegrationTest.java
+│       └── MemberChangeTriggerTest.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
@@ -106,7 +105,7 @@ plugin-clevercloud/
 - The default base URL is `https://api-bridge.clever-cloud.com/v2`. `baseUrl()` is overridable per class (used by tests to point at WireMock).
 - `organisationId` is optional on every task and trigger: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`.
 - Base the wording on the implemented packages and classes, not on template README text.
-- `DeploymentTrigger` and `MemberChangeTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
+- `Trigger` (deployments) and `MemberChangeTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
 - `MemberChangeTrigger` uses `runContext.namespaceKv()` to persist the member ID set between evaluations (no timestamps in the members response).
 - `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use ListMembers/ListApplications for user accounts.
 

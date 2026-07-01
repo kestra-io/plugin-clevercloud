@@ -81,7 +81,7 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
             () -> new IllegalArgumentException("organisationId is required for ListMembers: /self/members does not exist")
         );
-        var url = baseUrl() + "/organisations/" + rOrgId + "/members";
+        var url = join(baseUrl(), "organisations/" + rOrgId + "/members");
 
         logger.info("Listing members for organisation {}", rOrgId);
         var body = makeCall(runContext, buildGetRequest(url));

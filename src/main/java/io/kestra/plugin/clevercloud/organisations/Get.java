@@ -73,7 +73,7 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         var logger = runContext.logger();
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
-        var url = baseUrl() + "/" + resourceBase(rOrgId);
+        var url = join(baseUrl(), resourceBase(rOrgId));
 
         logger.info("Fetching {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
         var body = makeCall(runContext, buildGetRequest(url));

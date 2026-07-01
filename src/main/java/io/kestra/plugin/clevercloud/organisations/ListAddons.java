@@ -89,7 +89,7 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
         var logger = runContext.logger();
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
-        var url = baseUrl() + "/" + resourceBase(rOrgId) + "/addons";
+        var url = join(baseUrl(), resourceBase(rOrgId)) + "/addons";
 
         logger.info("Listing add-ons for {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
         var body = makeCall(runContext, buildGetRequest(url));

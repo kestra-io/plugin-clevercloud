@@ -96,6 +96,7 @@ public class MemberChangeTrigger extends AbstractTrigger
     private Property<String> apiToken;
 
     @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
+    @PluginProperty(group = "advanced")
     HttpConfiguration options;
 
     protected String baseUrl() {
@@ -149,7 +150,7 @@ public class MemberChangeTrigger extends AbstractTrigger
         );
         var rEvent = runContext.render(event).as(MemberEvent.class).orElse(MemberEvent.MEMBER_CHANGED);
 
-        var url = baseUrl() + "/organisations/" + rOrgId + "/members";
+        var url = AbstractCleverCloudConnection.join(baseUrl(), "organisations/" + rOrgId + "/members");
 
         logger.debug("Polling members for organisation {}", rOrgId);
 
@@ -169,7 +170,8 @@ public class MemberChangeTrigger extends AbstractTrigger
             throw new HttpClientResponseException(
                 "Clever Cloud API error " + status + " polling members for " + rOrgId
                     + ": check apiToken and that the organisation exists",
-                e.getResponse()
+                e.getResponse(),
+                e
             );
         }
 
