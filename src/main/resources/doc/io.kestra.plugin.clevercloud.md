@@ -50,9 +50,7 @@ Fetches a single deployment by ID. Required: `applicationId`, `deploymentId`. Op
 
 **`io.kestra.plugin.clevercloud.deployments.WaitForState`**
 
-Polls a deployment until it reaches the configured `targetState`. Throws when the deployment reaches a different terminal state or when `timeout` elapses. Required: `applicationId`, `deploymentId`, `targetState` (enum: OK, FAIL, CANCELLED, WIP). Optional: `organisationId` (defaults to /self when omitted), `pollInterval` (default PT15S), `timeout` (default PT30M). Outputs: `deploymentId`, `state`.
-
-Use `targetState: OK` to wait for a successful deploy.
+Polls a deployment until it reaches the configured `targetState`. By default it never fails: if the deployment reaches a different terminal state or `timeout` elapses, it logs a warning and returns the last observed state with `reachedTarget` set to false. Set `failOnUnreached` to true to throw instead. Required: `applicationId`, `deploymentId`. Optional: `targetState` (enum: OK, FAIL, CANCELLED, WIP, defaults to OK), `failOnUnreached` (default false), `organisationId` (defaults to /self when omitted), `pollInterval` (default PT15S), `timeout` (default PT30M). Outputs: `deploymentId`, `state`, `reachedTarget`.
 
 ## Triggers
 

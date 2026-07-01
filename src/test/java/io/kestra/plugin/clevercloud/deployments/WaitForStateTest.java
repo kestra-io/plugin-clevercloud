@@ -49,10 +49,11 @@ class WaitForStateTest {
 
         assertThat(output.getDeploymentId(), is("deployment_d1"));
         assertThat(output.getState(), is("OK"));
+        assertThat(output.isReachedTarget(), is(true));
     }
 
     @Test
-    void throwsWhenDeploymentReachesWrongTerminalState(WireMockRuntimeInfo wireMockRuntimeInfo) {
+    void returnsWithoutFailingWhenDeploymentReachesWrongTerminalState(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d2"))
             .willReturn(okJson("""
                 {"uuid":"deployment_d2","state":"FAIL","date":"1782127329927","action":"DEPLOY","commit":"bad1234"}
@@ -72,13 +73,14 @@ class WaitForStateTest {
             .build();
 
         var runContext = runContextFactory.of();
-        var ex = assertThrows(IllegalStateException.class, () -> task.run(runContext));
-        assertThat(ex.getMessage(), containsString("FAIL"));
-        assertThat(ex.getMessage(), containsString("expected OK"));
+        var output = task.run(runContext);
+
+        assertThat(output.getState(), is("FAIL"));
+        assertThat(output.isReachedTarget(), is(false));
     }
 
     @Test
-    void throwsOnCancelledState(WireMockRuntimeInfo wireMockRuntimeInfo) {
+    void throwsWhenDeploymentReachesWrongTerminalStateAndFailOnUnreachedIsTrue(WireMockRuntimeInfo wireMockRuntimeInfo) {
         stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d5"))
             .willReturn(okJson("""
                 {"uuid":"deployment_d5","state":"CANCELLED","date":"1782127287203","action":"DEPLOY","commit":"abc"}
@@ -92,6 +94,7 @@ class WaitForStateTest {
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d5"))
             .targetState(Property.ofValue(DeploymentState.OK))
+            .failOnUnreached(Property.ofValue(true))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofSeconds(5)))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
@@ -138,10 +141,11 @@ class WaitForStateTest {
 
         verify(2, getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d3")));
         assertThat(output.getState(), is("OK"));
+        assertThat(output.isReachedTarget(), is(true));
     }
 
     @Test
-    void throwsOnTimeout(WireMockRuntimeInfo wireMockRuntimeInfo) {
+    void returnsWithoutFailingOnTimeout(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d4"))
             .willReturn(okJson("""
                 {"uuid":"deployment_d4","state":"WIP","date":"1782127287203","action":"DEPLOY","commit":"stuck0001"}
@@ -155,6 +159,34 @@ class WaitForStateTest {
             .applicationId(Property.ofValue("app_test"))
             .deploymentId(Property.ofValue("deployment_d4"))
             .targetState(Property.ofValue(DeploymentState.OK))
+            .pollInterval(Property.ofValue(Duration.ofMillis(10)))
+            .timeout(Property.ofValue(Duration.ofMillis(50)))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var runContext = runContextFactory.of();
+        var output = task.run(runContext);
+
+        assertThat(output.getState(), is("WIP"));
+        assertThat(output.isReachedTarget(), is(false));
+    }
+
+    @Test
+    void throwsOnTimeoutWhenFailOnUnreachedIsTrue(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d8"))
+            .willReturn(okJson("""
+                {"uuid":"deployment_d8","state":"WIP","date":"1782127287203","action":"DEPLOY","commit":"stuck0001"}
+                """)));
+
+        var task = TestableWaitForState.builder()
+            .id("wait-timeout-fail-test")
+            .type(WaitForState.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_test"))
+            .deploymentId(Property.ofValue("deployment_d8"))
+            .targetState(Property.ofValue(DeploymentState.OK))
+            .failOnUnreached(Property.ofValue(true))
             .pollInterval(Property.ofValue(Duration.ofMillis(10)))
             .timeout(Property.ofValue(Duration.ofMillis(50)))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())

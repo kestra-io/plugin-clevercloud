@@ -33,8 +33,11 @@ import java.time.Instant;
         states (OK, FAIL, CANCELLED) or the specified target state.
 
         WIP means the deployment is still in progress. A successful deployment has state OK
-        and action DEPLOY. Throws when the deployment reaches a terminal state that is not
-        the target, or when the timeout elapses.
+        and action DEPLOY.
+
+        By default the task never fails: if the deployment reaches a terminal state other than
+        the target, or the timeout elapses, it logs a warning and returns the last observed
+        state with reachedTarget set to false. Set failOnUnreached to true to throw instead.
 
         When organisationId is omitted, the personal account endpoint (/self) is used.
         """
@@ -42,7 +45,7 @@ import java.time.Instant;
 @Plugin(
     examples = {
         @Example(
-            title = "Wait until a deployment succeeds or fails",
+            title = "Wait until a deployment succeeds",
             full = true,
             code = """
                 id: wait_deployment
@@ -55,7 +58,6 @@ import java.time.Instant;
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     deploymentId: "{{ inputs.deploymentId }}"
-                    targetState: OK
                     pollInterval: PT10S
                     timeout: PT10M
                 """
@@ -86,12 +88,25 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         description = """
             Accepts: OK (deployment succeeded), FAIL (deployment errored), CANCELLED (deployment cancelled),
             WIP (still in progress, not a terminal state).
-            Use OK to wait for a successful deploy.
+            Defaults to OK, the state of a successful deploy.
             """
     )
     @PluginProperty(group = "main")
     @NotNull
-    private Property<DeploymentState> targetState;
+    @Builder.Default
+    private Property<DeploymentState> targetState = Property.ofValue(DeploymentState.OK);
+
+    @Schema(
+        title = "Fail the task if the target state is not reached",
+        description = """
+            When false (the default), the task logs a warning and returns the last observed
+            state instead of failing if the deployment reaches a different terminal state or
+            the timeout elapses. When true, the task throws in both cases.
+            """
+    )
+    @PluginProperty(group = "reliability")
+    @Builder.Default
+    private Property<Boolean> failOnUnreached = Property.ofValue(false);
 
     @Schema(
         title = "How often to poll the deployment status",
@@ -119,6 +134,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         var rTargetState = runContext.render(targetState).as(DeploymentState.class).orElseThrow();
         var rPollInterval = runContext.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(15));
         var rTimeout = runContext.render(timeout).as(Duration.class).orElse(Duration.ofMinutes(30));
+        var rFailOnUnreached = runContext.render(failOnUnreached).as(Boolean.class).orElse(false);
 
         var url = baseUrl()
             + "/" + resourceBase(rOrgId)
@@ -140,6 +156,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
                 return Output.builder()
                     .deploymentId(rDeployId)
                     .state(rawState)
+                    .reachedTarget(true)
                     .build();
             }
 
@@ -155,16 +172,40 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
 
             // A known terminal state that is not the target means the deployment ended unexpectedly.
             if (knownState != null && knownState.isTerminal()) {
-                throw new IllegalStateException(
-                    "Deployment " + rDeployId + " reached state " + rawState + " but expected " + rTargetState
+                if (rFailOnUnreached) {
+                    throw new IllegalStateException(
+                        "Deployment " + rDeployId + " reached state " + rawState + " but expected " + rTargetState
+                    );
+                }
+
+                logger.warn(
+                    "Deployment {} reached terminal state {} but expected {}, returning without failing",
+                    rDeployId, rawState, rTargetState
                 );
+                return Output.builder()
+                    .deploymentId(rDeployId)
+                    .state(rawState)
+                    .reachedTarget(false)
+                    .build();
             }
 
             if (Instant.now().isAfter(deadline)) {
-                throw new IllegalStateException(
-                    "Timed out waiting for deployment " + rDeployId + " to reach " + rTargetState
-                        + " after " + rTimeout + ". Last state: " + rawState
+                if (rFailOnUnreached) {
+                    throw new IllegalStateException(
+                        "Timed out waiting for deployment " + rDeployId + " to reach " + rTargetState
+                            + " after " + rTimeout + ". Last state: " + rawState
+                    );
+                }
+
+                logger.warn(
+                    "Timed out after {} waiting for deployment {} to reach {}, last state {}",
+                    rTimeout, rDeployId, rTargetState, rawState
                 );
+                return Output.builder()
+                    .deploymentId(rDeployId)
+                    .state(rawState)
+                    .reachedTarget(false)
+                    .build();
             }
 
             try {
@@ -185,5 +226,8 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
 
         @Schema(title = "Final state when the task completed")
         private final String state;
+
+        @Schema(title = "Whether the configured targetState was reached")
+        private final boolean reachedTarget;
     }
 }
