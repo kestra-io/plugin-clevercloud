@@ -27,7 +27,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 @KestraTest
-class DeploymentTriggerTest {
+class TriggerTest {
 
     @Inject
     RunContextFactory runContextFactory;
@@ -48,10 +48,10 @@ class DeploymentTriggerTest {
         mockServer.shutdown();
     }
 
-    private DeploymentTrigger buildTrigger() {
-        return TestableDeploymentTrigger.builder()
+    private Trigger buildTrigger() {
+        return TestableTrigger.builder()
             .id("trigger-test")
-            .type(DeploymentTrigger.class.getName())
+            .type(Trigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .applicationId(Property.ofValue("app_test"))
@@ -61,10 +61,10 @@ class DeploymentTriggerTest {
             .build();
     }
 
-    private DeploymentTrigger buildTriggerWithoutOrg() {
-        return TestableDeploymentTrigger.builder()
+    private Trigger buildTriggerWithoutOrg() {
+        return TestableTrigger.builder()
             .id("trigger-self-test")
-            .type(DeploymentTrigger.class.getName())
+            .type(Trigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .applicationId(Property.ofValue("app_personal"))
             .targetState(Property.ofValue(DeploymentState.OK))
@@ -73,7 +73,7 @@ class DeploymentTriggerTest {
             .build();
     }
 
-    private ConditionContext conditionContext(DeploymentTrigger trigger, TriggerContext triggerContext) throws Exception {
+    private ConditionContext conditionContext(Trigger trigger, TriggerContext triggerContext) throws Exception {
         var flow = Flow.builder()
             .id("test-flow")
             .namespace("company.team")

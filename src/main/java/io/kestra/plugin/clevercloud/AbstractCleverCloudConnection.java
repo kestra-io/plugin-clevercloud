@@ -45,11 +45,6 @@ public abstract class AbstractCleverCloudConnection extends Task {
         return DEFAULT_BASE_URL;
     }
 
-    /**
-     * Returns the resource root path segment for the given optional organisation ID.
-     * When organisationId is present: "organisations/{id}".
-     * When absent: "self".
-     */
     public static String resourceBase(String organisationId) {
         if (organisationId != null && !organisationId.isBlank()) {
             return "organisations/" + organisationId;
@@ -57,10 +52,6 @@ public abstract class AbstractCleverCloudConnection extends Task {
         return "self";
     }
 
-    /**
-     * Makes an authenticated HTTP call and returns the raw response body string.
-     * Throws HttpClientResponseException on non-2xx with a clean message (no response body in the message).
-     */
     public String makeCall(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder) throws Exception {
         var logger = runContext.logger();
         try (var client = new HttpClient(runContext, options)) {

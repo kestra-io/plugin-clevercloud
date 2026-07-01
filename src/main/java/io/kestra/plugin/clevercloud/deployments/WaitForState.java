@@ -160,7 +160,6 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
                 );
             }
 
-            // Check deadline before sleeping so we do not issue one extra HTTP call after expiry.
             if (Instant.now().isAfter(deadline)) {
                 throw new IllegalStateException(
                     "Timed out waiting for deployment " + rDeployId + " to reach " + rTargetState

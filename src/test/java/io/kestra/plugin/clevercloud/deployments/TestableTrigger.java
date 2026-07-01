@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-public class TestableDeploymentTrigger extends DeploymentTrigger {
+public class TestableTrigger extends Trigger {
 
     private String testBaseUrl;
 

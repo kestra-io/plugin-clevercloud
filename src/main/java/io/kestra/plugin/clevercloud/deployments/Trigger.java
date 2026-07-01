@@ -68,7 +68,7 @@ import java.util.Optional;
 
                 triggers:
                   - id: watch_deploy
-                    type: io.kestra.plugin.clevercloud.deployments.DeploymentTrigger
+                    type: io.kestra.plugin.clevercloud.deployments.Trigger
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -90,7 +90,7 @@ import java.util.Optional;
 
                 triggers:
                   - id: watch_deploy
-                    type: io.kestra.plugin.clevercloud.deployments.DeploymentTrigger
+                    type: io.kestra.plugin.clevercloud.deployments.Trigger
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     targetState: OK
@@ -104,8 +104,8 @@ import java.util.Optional;
         )
     }
 )
-public class DeploymentTrigger extends AbstractTrigger
-    implements PollingTriggerInterface, TriggerOutput<DeploymentTrigger.Output> {
+public class Trigger extends AbstractTrigger
+    implements PollingTriggerInterface, TriggerOutput<Trigger.Output> {
 
     @NotNull
     @Schema(title = "API token", description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}.")

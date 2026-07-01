@@ -56,7 +56,7 @@ Use `targetState: OK` to wait for a successful deploy.
 
 ## Triggers
 
-**`io.kestra.plugin.clevercloud.deployments.DeploymentTrigger`**
+**`io.kestra.plugin.clevercloud.deployments.Trigger`**
 
 Polls the deployment list for an application at each `interval` and fires when any DEPLOY action deployment matches `targetState` (enum: OK, FAIL, CANCELLED, WIP). UNDEPLOY records are ignored. The number of deployments checked per poll is controlled by `maxDeployments` (default 25). Optional: `organisationId` (defaults to /self when omitted). Outputs accessible via `{{ trigger.* }}`: `deploymentId`, `state`, `commit`.
 
