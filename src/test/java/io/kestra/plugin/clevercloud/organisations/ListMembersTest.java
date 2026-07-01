@@ -1,5 +1,7 @@
 package io.kestra.plugin.clevercloud.organisations;
 
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -7,40 +9,23 @@ import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
 import jakarta.inject.Inject;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 @KestraTest
+@WireMockTest
 class ListMembersTest {
 
     @Inject
     RunContextFactory runContextFactory;
 
-    MockWebServer mockServer;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        mockServer = new MockWebServer();
-        mockServer.start();
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        mockServer.shutdown();
-    }
-
     @Test
-    void parseMemberListResponse() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void parseMemberListResponse(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson("""
                 [
                   {
                     "member": {
@@ -65,14 +50,14 @@ class ListMembersTest {
                     "job": null
                   }
                 ]
-                """));
+                """)));
 
         var task = TestableListMembers.builder()
             .id("list-members-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -95,18 +80,16 @@ class ListMembersTest {
     }
 
     @Test
-    void handleEmptyMemberList() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void handleEmptyMemberList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_empty/members"))
+            .willReturn(okJson("[]")));
 
         var task = TestableListMembers.builder()
             .id("list-members-empty-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_empty"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -117,60 +100,72 @@ class ListMembersTest {
     }
 
     @Test
-    void sendsBearerAuthorizationHeader() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_abc123/members"))
+            .willReturn(okJson("[]")));
 
         var task = TestableListMembers.builder()
             .id("list-members-auth-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_abc123/members"))
+            .withHeader("Authorization", equalTo("Bearer my-secret-token")));
     }
 
     @Test
-    void requestUrlContainsOrgIdAndMembersPath() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("[]"));
+    void requestUrlContainsOrgIdAndMembersPath(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_abc123/members"))
+            .willReturn(okJson("[]")));
 
         var task = TestableListMembers.builder()
             .id("list-members-url-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_abc123"))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
         task.run(runContext);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getPath(), containsString("/organisations/orga_abc123/members"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_abc123/members")));
     }
 
     @Test
-    void fetchTypeFetchReturnsFullListInOutput() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void requestPathHasNoDoubleSlashWhenBaseUrlHasTrailingSlash(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson("[]")));
+
+        var task = TestableListMembers.builder()
+            .id("list-members-trailing-slash-test")
+            .type(ListMembers.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl() + "/")
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        verify(getRequestedFor(urlEqualTo("/organisations/orga_test/members")));
+    }
+
+    @Test
+    void fetchTypeFetchReturnsFullListInOutput(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson("""
                 [
                   {"member": {"id": "user_fetch-1"}, "role": "ADMIN"},
                   {"member": {"id": "user_fetch-2"}, "role": "DEVELOPER"}
                 ]
-                """));
+                """)));
 
         var task = TestableListMembers.builder()
             .id("list-members-fetch-test")
@@ -178,7 +173,7 @@ class ListMembersTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .fetchType(Property.ofValue(FetchType.FETCH))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();
@@ -191,16 +186,14 @@ class ListMembersTest {
     }
 
     @Test
-    void fetchTypeStoreWritesIonFileToInternalStorage() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody("""
+    void fetchTypeStoreWritesIonFileToInternalStorage(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson("""
                 [
                   {"member": {"id": "user_store-1"}, "role": "ADMIN"},
                   {"member": {"id": "user_store-2"}, "role": "DEVELOPER"}
                 ]
-                """));
+                """)));
 
         var task = TestableListMembers.builder()
             .id("list-members-store-test")
@@ -208,7 +201,7 @@ class ListMembersTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .fetchType(Property.ofValue(FetchType.STORE))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContextFactory.of();

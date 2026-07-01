@@ -7,7 +7,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Test-only subclass that overrides baseUrl() to point at a MockWebServer instead of the
+ * Test-only subclass that overrides baseUrl() to point at a WireMock server instead of the
  * real Clever Cloud API.
  */
 @SuperBuilder

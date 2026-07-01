@@ -1,5 +1,8 @@
 package io.kestra.plugin.clevercloud.organisations;
 
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
@@ -10,10 +13,6 @@ import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.runners.RunContextInitializer;
 import jakarta.inject.Inject;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -21,10 +20,12 @@ import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 @KestraTest
+@WireMockTest
 class MemberChangeTriggerTest {
 
     @Inject
@@ -33,24 +34,14 @@ class MemberChangeTriggerTest {
     @Inject
     RunContextInitializer runContextInitializer;
 
-    MockWebServer mockServer;
-
     // Each test gets a unique trigger ID to prevent KV store state leaking between tests.
     private String triggerId;
 
-    @BeforeEach
-    void setUp() throws Exception {
-        mockServer = new MockWebServer();
-        mockServer.start();
-        triggerId = "trigger-member-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    private String buildTriggerId() {
+        return "trigger-member-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
-        mockServer.shutdown();
-    }
-
-    private MemberChangeTrigger buildTrigger(MemberChangeTrigger.MemberEvent event) {
+    private MemberChangeTrigger buildTrigger(MemberChangeTrigger.MemberEvent event, String baseUrl) {
         return TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
@@ -58,7 +49,7 @@ class MemberChangeTriggerTest {
             .organisationId(Property.ofValue("orga_test"))
             .event(Property.ofValue(event))
             .interval(Duration.ofMinutes(1))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(baseUrl)
             .build();
     }
 
@@ -114,13 +105,12 @@ class MemberChangeTriggerTest {
         """;
 
     @Test
-    void firstEvaluationStoresBaselineAndDoesNotFire() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
+    void firstEvaluationStoresBaselineAndDoesNotFire(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson(MEMBER_A_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -130,19 +120,12 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void doesNotRefireWhenMemberSetUnchanged() throws Exception {
-        // First call: baseline
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
-        // Second call: same members
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
+    void doesNotRefireWhenMemberSetUnchanged(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson(MEMBER_A_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -154,19 +137,19 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void firesWhenMemberIsAdded() throws Exception {
-        // First call: baseline with Alice only
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
-        // Second call: Alice + Bob
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_AB_JSON));
+    void firesWhenMemberIsAdded(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("member-added")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(MEMBER_A_JSON))
+            .willSetStateTo("baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("member-added")
+            .whenScenarioStateIs("baseline-set")
+            .willReturn(okJson(MEMBER_AB_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_ADDED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_ADDED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -186,19 +169,19 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void firesWhenMemberIsRemoved() throws Exception {
-        // First call: baseline with Alice + Bob
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_AB_JSON));
-        // Second call: only Alice remains
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
+    void firesWhenMemberIsRemoved(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("member-removed")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(MEMBER_AB_JSON))
+            .willSetStateTo("baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("member-removed")
+            .whenScenarioStateIs("baseline-set")
+            .willReturn(okJson(MEMBER_A_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_REMOVED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_REMOVED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -218,19 +201,19 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void memberAddedEventDoesNotFireOnRemoval() throws Exception {
-        // First call: baseline with Alice + Bob
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_AB_JSON));
-        // Second call: Bob removed
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
+    void memberAddedEventDoesNotFireOnRemoval(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("added-vs-removal")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(MEMBER_AB_JSON))
+            .willSetStateTo("baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("added-vs-removal")
+            .whenScenarioStateIs("baseline-set")
+            .willReturn(okJson(MEMBER_A_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_ADDED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_ADDED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -242,19 +225,19 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void memberRemovedEventDoesNotFireOnAddition() throws Exception {
-        // First call: baseline with Alice only
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
-        // Second call: Bob added
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_AB_JSON));
+    void memberRemovedEventDoesNotFireOnAddition(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("removed-vs-addition")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(MEMBER_A_JSON))
+            .willSetStateTo("baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("removed-vs-addition")
+            .whenScenarioStateIs("baseline-set")
+            .willReturn(okJson(MEMBER_AB_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_REMOVED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_REMOVED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -266,19 +249,19 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void memberChangedEventFiresOnBothAdditionAndRemoval() throws Exception {
-        // First call: baseline with Alice only
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
-        // Second call: Bob added (any change)
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_AB_JSON));
+    void memberChangedEventFiresOnBothAdditionAndRemoval(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("changed-fires")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(MEMBER_A_JSON))
+            .willSetStateTo("baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("changed-fires")
+            .whenScenarioStateIs("baseline-set")
+            .willReturn(okJson(MEMBER_AB_JSON)));
 
-        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED);
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
 
@@ -290,11 +273,10 @@ class MemberChangeTriggerTest {
     }
 
     @Test
-    void sendsBearerAuthorizationHeader() throws Exception {
-        mockServer.enqueue(new MockResponse()
-            .setResponseCode(200)
-            .addHeader("Content-Type", "application/json")
-            .setBody(MEMBER_A_JSON));
+    void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson(MEMBER_A_JSON)));
 
         var trigger = TestableMemberChangeTrigger.builder()
             .id(triggerId)
@@ -303,14 +285,29 @@ class MemberChangeTriggerTest {
             .organisationId(Property.ofValue("orga_test"))
             .event(Property.ofValue(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED))
             .interval(Duration.ofMinutes(1))
-            .testBaseUrl(mockServer.url("").toString())
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var trigCtx = triggerContext();
         var condCtx = conditionContext(trigger, trigCtx);
         trigger.evaluate(condCtx, trigCtx);
 
-        var request = mockServer.takeRequest();
-        assertThat(request.getHeader("Authorization"), is("Bearer my-secret-token"));
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/members"))
+            .withHeader("Authorization", equalTo("Bearer my-secret-token")));
+    }
+
+    @Test
+    void requestPathHasNoDoubleSlashWhenBaseUrlHasTrailingSlash(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubFor(get(urlEqualTo("/organisations/orga_test/members"))
+            .willReturn(okJson(MEMBER_A_JSON)));
+
+        var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl() + "/");
+        var trigCtx = triggerContext();
+        var condCtx = conditionContext(trigger, trigCtx);
+
+        trigger.evaluate(condCtx, trigCtx);
+
+        verify(getRequestedFor(urlEqualTo("/organisations/orga_test/members")));
     }
 }
