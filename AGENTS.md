@@ -15,12 +15,14 @@ state changes without writing glue scripts.
 
 ### Architecture
 
-Single-module plugin. All components share an OAuth 1.0a signing layer in `AbstractCleverCloudConnection`.
-HTTP requests are built with OkHttp and signed via ScribeJava (HMAC-SHA1).
+Single-module plugin. All components share a Bearer-token auth base class, `AbstractCleverCloudConnection`.
+HTTP requests are built and sent with Kestra's internal `io.kestra.core.http.client.HttpClient`.
+There is no OAuth signing, OkHttp, or ScribeJava dependency: authentication is a single `apiToken`
+sent as an `Authorization: Bearer` header.
 
 Source packages under `io.kestra.plugin`:
 
-- `clevercloud` (root: shared base class, placeholder task, API descriptor)
+- `clevercloud` (root: shared Bearer-auth base class)
 - `clevercloud.deployments` (deployment tasks and trigger)
 
 Infrastructure dependencies (Docker Compose services):
@@ -29,12 +31,11 @@ Infrastructure dependencies (Docker Compose services):
 
 ### Key Plugin Classes
 
-- `io.kestra.plugin.clevercloud.AbstractCleverCloudConnection` - shared OAuth 1.0a auth base class
-- `io.kestra.plugin.clevercloud.CleverCloudApi` - ScribeJava API descriptor for Clever Cloud
-- `io.kestra.plugin.clevercloud.deployments.List` - list deployments for an application
+- `io.kestra.plugin.clevercloud.AbstractCleverCloudConnection` - shared Bearer-auth base class; owns `apiToken`, `baseUrl()`, URL joining, and error-safe HTTP call handling
+- `io.kestra.plugin.clevercloud.deployments.List` - list deployments for an application, supports `fetchType` (FETCH, FETCH_ONE, STORE, NONE)
 - `io.kestra.plugin.clevercloud.deployments.Get` - get a single deployment by ID
-- `io.kestra.plugin.clevercloud.deployments.WaitForState` - poll until a deployment reaches a target state
-- `io.kestra.plugin.clevercloud.deployments.DeploymentTrigger` - polling trigger that fires on deployment state changes
+- `io.kestra.plugin.clevercloud.deployments.WaitForState` - poll until a deployment reaches a target state, with `failOnUnreached` to control whether an unreached target throws or just returns the last observed state
+- `io.kestra.plugin.clevercloud.deployments.Trigger` - polling trigger that fires on deployment state changes
 
 ### Project Structure
 
@@ -42,25 +43,26 @@ Infrastructure dependencies (Docker Compose services):
 plugin-clevercloud/
 ├── src/main/java/io/kestra/plugin/clevercloud/
 │   ├── AbstractCleverCloudConnection.java
-│   ├── CleverCloudApi.java
-│   ├── ClevercloudTask.java
 │   ├── package-info.java
 │   └── deployments/
 │       ├── package-info.java
 │       ├── model/
-│       │   └── Deployment.java
+│       │   ├── Deployment.java
+│       │   └── DeploymentState.java
 │       ├── List.java
 │       ├── Get.java
 │       ├── WaitForState.java
-│       └── DeploymentTrigger.java
+│       └── Trigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
 │   └── deployments/
 │       ├── ListTest.java
 │       ├── GetTest.java
 │       ├── WaitForStateTest.java
+│       ├── TriggerTest.java
 │       ├── TestableList.java
 │       ├── TestableGet.java
-│       └── TestableWaitForState.java
+│       ├── TestableWaitForState.java
+│       └── TestableTrigger.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
@@ -72,9 +74,11 @@ plugin-clevercloud/
 
 ## Local rules
 
-- All credential properties (`consumerKey`, `consumerSecret`, `token`, `tokenSecret`) must be marked `@PluginProperty(secret = true)`.
+- `apiToken` is the single credential for the whole plugin and must be marked `@PluginProperty(group = "connection", secret = true)`.
+- The default base URL is `https://api-bridge.clever-cloud.com/v2`. `baseUrl()` is overridable per class (used by tests to point at WireMock).
+- `organisationId` is optional on every task and trigger: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`.
 - Base the wording on the implemented packages and classes, not on template README text.
-- `DeploymentTrigger` uses a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
+- `Trigger` uses a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
 
 ## References
 

@@ -93,8 +93,7 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         var rAppId = runContext.render(applicationId).as(String.class).orElseThrow();
         var rDeployId = runContext.render(deploymentId).as(String.class).orElseThrow();
 
-        var url = baseUrl()
-            + "/" + resourceBase(rOrgId)
+        var url = join(baseUrl(), resourceBase(rOrgId))
             + "/applications/" + rAppId
             + "/deployments/" + rDeployId;
 

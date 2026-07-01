@@ -136,8 +136,7 @@ public class WaitForState extends AbstractCleverCloudConnection implements Runna
         var rTimeout = runContext.render(timeout).as(Duration.class).orElse(Duration.ofMinutes(30));
         var rFailOnUnreached = runContext.render(failOnUnreached).as(Boolean.class).orElse(false);
 
-        var url = baseUrl()
-            + "/" + resourceBase(rOrgId)
+        var url = join(baseUrl(), resourceBase(rOrgId))
             + "/applications/" + rAppId
             + "/deployments/" + rDeployId;
 

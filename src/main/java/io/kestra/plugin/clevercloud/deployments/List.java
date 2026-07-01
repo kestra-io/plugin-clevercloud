@@ -107,8 +107,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
             () -> new IllegalArgumentException("applicationId is required")
         );
 
-        var urlBuilder = new StringBuilder(baseUrl())
-            .append("/").append(resourceBase(rOrgId))
+        var urlBuilder = new StringBuilder(join(baseUrl(), resourceBase(rOrgId)))
             .append("/applications/").append(rAppId)
             .append("/deployments");
 

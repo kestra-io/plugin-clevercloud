@@ -276,6 +276,22 @@ class TriggerTest {
     }
 
     @Test
+    void requestPathHasNoDoubleSlashWhenBaseUrlHasTrailingSlash(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        var lastPoll = ZonedDateTime.now().minusMinutes(10);
+
+        stubFor(get(urlEqualTo("/organisations/orga_test/applications/app_test/deployments?limit=25"))
+            .willReturn(okJson("[]")));
+
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl() + "/");
+        var trigCtx = triggerContext(lastPoll);
+        var condCtx = conditionContext(trigger, trigCtx);
+
+        trigger.evaluate(condCtx, trigCtx);
+
+        verify(getRequestedFor(urlEqualTo("/organisations/orga_test/applications/app_test/deployments?limit=25")));
+    }
+
+    @Test
     void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(10);
 

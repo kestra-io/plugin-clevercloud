@@ -132,6 +132,29 @@ class GetTest {
     }
 
     @Test
+    void requestPathHasNoDoubleSlashWhenBaseUrlHasTrailingSlash(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d1"))
+            .willReturn(okJson("""
+                {"uuid":"deployment_d1","state":"OK","date":"1782127329927","action":"DEPLOY"}
+                """)));
+
+        var task = TestableGet.builder()
+            .id("get-trailing-slash-test")
+            .type(Get.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_test"))
+            .deploymentId(Property.ofValue("deployment_d1"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl() + "/")
+            .build();
+
+        var runContext = runContextFactory.of();
+        task.run(runContext);
+
+        verify(getRequestedFor(urlEqualTo("/organisations/orga_test/applications/app_test/deployments/deployment_d1")));
+    }
+
+    @Test
     void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(get(urlPathEqualTo("/self/applications/app_mine/deployments/deployment_d2"))
             .willReturn(okJson("""

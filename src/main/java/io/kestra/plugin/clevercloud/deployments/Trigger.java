@@ -113,6 +113,7 @@ public class Trigger extends AbstractTrigger
     private Property<String> apiToken;
 
     @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
+    @PluginProperty(group = "advanced")
     HttpConfiguration options;
 
     protected String baseUrl() {
@@ -181,8 +182,7 @@ public class Trigger extends AbstractTrigger
         var rTargetState = runContext.render(targetState).as(DeploymentState.class).orElseThrow();
         var rMaxDeployments = runContext.render(maxDeployments).as(Integer.class).orElse(25);
 
-        var url = baseUrl()
-            + "/" + AbstractCleverCloudConnection.resourceBase(rOrgId)
+        var url = AbstractCleverCloudConnection.join(baseUrl(), AbstractCleverCloudConnection.resourceBase(rOrgId))
             + "/applications/" + rAppId
             + "/deployments?limit=" + rMaxDeployments;
 
@@ -204,7 +204,8 @@ public class Trigger extends AbstractTrigger
             throw new HttpClientResponseException(
                 "Clever Cloud API error " + status + " polling deployments for " + rAppId
                     + ": check apiToken and that the application exists",
-                e.getResponse()
+                e.getResponse(),
+                e
             );
         }
 

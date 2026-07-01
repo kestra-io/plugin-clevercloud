@@ -39,6 +39,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
     private Property<String> apiToken;
 
     @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
+    @PluginProperty(group = "advanced")
     HttpConfiguration options;
 
     protected String baseUrl() {
@@ -50,6 +51,14 @@ public abstract class AbstractCleverCloudConnection extends Task {
             return "organisations/" + organisationId;
         }
         return "self";
+    }
+
+    /**
+     * Joins a base URL and a path segment with exactly one slash, so a trailing slash on the
+     * base (e.g. a misconfigured baseUrl override) never produces a double slash in the request URI.
+     */
+    public static String join(String base, String path) {
+        return base.replaceAll("/+$", "") + "/" + path.replaceAll("^/+", "");
     }
 
     public String makeCall(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder) throws Exception {
@@ -70,7 +79,8 @@ public abstract class AbstractCleverCloudConnection extends Task {
             throw new HttpClientResponseException(
                 "Clever Cloud API error " + status + " on " + method + " " + uri
                     + ": check apiToken and that the resource exists",
-                e.getResponse()
+                e.getResponse(),
+                e
             );
         } catch (IllegalVariableEvaluationException e) {
             logger.error("Failed to render apiToken: {}", e.getMessage());
