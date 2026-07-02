@@ -1,17 +1,15 @@
 package io.kestra.plugin.clevercloud.organisations;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
-import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.runners.DefaultRunContext;
-import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.runners.RunContextInitializer;
+import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
@@ -20,16 +18,19 @@ import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
 
-@KestraTest
-@WireMockTest
-class MemberChangeTriggerTest {
-
-    @Inject
-    RunContextFactory runContextFactory;
+class MemberChangeTriggerTest extends AbstractClevercloudTest {
 
     @Inject
     RunContextInitializer runContextInitializer;
@@ -42,7 +43,7 @@ class MemberChangeTriggerTest {
     }
 
     private MemberChangeTrigger buildTrigger(MemberChangeTrigger.MemberEvent event, String baseUrl) {
-        return TestableMemberChangeTrigger.builder()
+        return TestTasks.TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -53,11 +54,11 @@ class MemberChangeTriggerTest {
             .build();
     }
 
-    private ConditionContext conditionContext(MemberChangeTrigger trigger, TriggerContext triggerContext) throws Exception {
+    private ConditionContext conditionContext(MemberChangeTrigger trigger, TriggerContext triggerContext, String flowId) throws Exception {
         // tenantId must be non-null so namespaceKv can build valid storage paths.
         // The local storage backend uses tenant as a path segment and fails with NPE on null.
         var flow = Flow.builder()
-            .id("test-flow")
+            .id(flowId)
             .namespace("company.team")
             .tenantId("test-tenant")
             .build();
@@ -69,11 +70,11 @@ class MemberChangeTriggerTest {
             .build();
     }
 
-    private TriggerContext triggerContext() {
+    private TriggerContext triggerContext(String flowId) {
         return TriggerContext.builder()
             .tenantId("test-tenant")
             .namespace("company.team")
-            .flowId("test-flow")
+            .flowId(flowId)
             .triggerId(triggerId)
             .date(ZonedDateTime.now())
             .build();
@@ -107,12 +108,11 @@ class MemberChangeTriggerTest {
     @Test
     void firstEvaluationStoresBaselineAndDoesNotFire(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         triggerId = buildTriggerId();
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
-            .willReturn(okJson(MEMBER_A_JSON)));
+        stubGetJson("/organisations/orga_test/members", MEMBER_A_JSON);
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
@@ -122,12 +122,11 @@ class MemberChangeTriggerTest {
     @Test
     void doesNotRefireWhenMemberSetUnchanged(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         triggerId = buildTriggerId();
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
-            .willReturn(okJson(MEMBER_A_JSON)));
+        stubGetJson("/organisations/orga_test/members", MEMBER_A_JSON);
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -150,8 +149,8 @@ class MemberChangeTriggerTest {
             .willReturn(okJson(MEMBER_AB_JSON)));
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_ADDED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -182,8 +181,8 @@ class MemberChangeTriggerTest {
             .willReturn(okJson(MEMBER_A_JSON)));
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_REMOVED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -214,8 +213,8 @@ class MemberChangeTriggerTest {
             .willReturn(okJson(MEMBER_A_JSON)));
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_ADDED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -238,8 +237,8 @@ class MemberChangeTriggerTest {
             .willReturn(okJson(MEMBER_AB_JSON)));
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_REMOVED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -262,8 +261,8 @@ class MemberChangeTriggerTest {
             .willReturn(okJson(MEMBER_AB_JSON)));
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -275,10 +274,9 @@ class MemberChangeTriggerTest {
     @Test
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         triggerId = buildTriggerId();
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
-            .willReturn(okJson(MEMBER_A_JSON)));
+        stubGetJson("/organisations/orga_test/members", MEMBER_A_JSON);
 
-        var trigger = TestableMemberChangeTrigger.builder()
+        var trigger = TestTasks.TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -288,12 +286,11 @@ class MemberChangeTriggerTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
         trigger.evaluate(condCtx, trigCtx);
 
-        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/members"))
-            .withHeader("Authorization", equalTo("Bearer my-secret-token")));
+        verifyBearerAuth(getRequestedFor(urlPathEqualTo("/organisations/orga_test/members")), "my-secret-token");
     }
 
     @Test
@@ -303,11 +300,60 @@ class MemberChangeTriggerTest {
             .willReturn(okJson(MEMBER_A_JSON)));
 
         var trigger = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl() + "/");
-        var trigCtx = triggerContext();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
         verify(getRequestedFor(urlEqualTo("/organisations/orga_test/members")));
+    }
+
+    @Test
+    void sameTriggerIdInDifferentFlowsDoNotShareKvBaseline(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        // Regression test: the KV key must include flowId, otherwise two flows using the same
+        // trigger id on the same organisation would clobber each other's baseline.
+        //
+        // Both triggers below share the same triggerId on purpose: before the fix, the KV key was
+        // "member-trigger-<triggerId>-<orgId>" with no flowId, so triggerB's poll would read and
+        // overwrite triggerA's baseline entry.
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("flow-isolation")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(MEMBER_A_JSON))
+            .willSetStateTo("flow-a-baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("flow-isolation")
+            .whenScenarioStateIs("flow-a-baseline-set")
+            .willReturn(okJson(MEMBER_AB_JSON))
+            .willSetStateTo("flow-b-baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .inScenario("flow-isolation")
+            .whenScenarioStateIs("flow-b-baseline-set")
+            .willReturn(okJson(MEMBER_A_JSON)));
+
+        var triggerA = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
+        var trigCtxA = triggerContext("flow-a");
+        var condCtxA = conditionContext(triggerA, trigCtxA, "flow-a");
+
+        // Establish baseline for flow-a: {user_aaa}.
+        var resultA1 = triggerA.evaluate(condCtxA, trigCtxA);
+        assertThat("flow-a first evaluation must not fire", resultA1.isEmpty(), is(true));
+
+        var triggerB = buildTrigger(MemberChangeTrigger.MemberEvent.MEMBER_CHANGED, wireMockRuntimeInfo.getHttpBaseUrl());
+        var trigCtxB = triggerContext("flow-b");
+        var condCtxB = conditionContext(triggerB, trigCtxB, "flow-b");
+
+        // flow-b's first evaluation sees {user_aaa, user_bbb} but must still establish its own
+        // baseline and not fire, since it is its own first evaluation. If the KV key collided on
+        // trigger id alone, this would instead compare against flow-a's stored baseline and fire.
+        var resultB1 = triggerB.evaluate(condCtxB, trigCtxB);
+        assertThat("flow-b first evaluation must not fire, since it establishes its own baseline",
+            resultB1.isEmpty(), is(true));
+
+        // flow-a polls again and sees {user_aaa} again, unchanged from its own baseline. If flow-b's
+        // poll had clobbered the shared KV entry, this would incorrectly detect user_bbb as removed.
+        var resultA2 = triggerA.evaluate(condCtxA, trigCtxA);
+        assertThat("flow-a must not fire on its own unchanged member set", resultA2.isEmpty(), is(true));
     }
 }

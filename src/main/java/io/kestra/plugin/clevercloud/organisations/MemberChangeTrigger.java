@@ -165,9 +165,9 @@ public class MemberChangeTrigger extends AbstractTrigger
             .map(m -> m.getMember().getId())
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        // Persist state in namespace KV keyed by trigger ID so multiple triggers on the same org
-        // do not interfere with each other.
-        var kvKey = "member-trigger-" + context.getTriggerId() + "-" + rOrgId;
+        // Persist state in namespace KV keyed by flow ID + trigger ID so multiple triggers on the
+        // same org, including from different flows sharing a trigger id, do not interfere with each other.
+        var kvKey = "member-trigger-" + context.getFlowId() + "-" + context.getTriggerId() + "-" + rOrgId;
         var kv = runContext.namespaceKv(context.getNamespace());
 
         var previousIdsOptional = kv.getValue(kvKey);

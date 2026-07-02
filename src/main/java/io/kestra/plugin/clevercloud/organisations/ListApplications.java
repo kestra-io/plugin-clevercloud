@@ -20,8 +20,9 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 import reactor.core.publisher.Flux;
 
-import java.io.FileWriter;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -113,7 +114,7 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
     private URI store(RunContext runContext, List<Application> applications) throws Exception {
         var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
 
-        try (var writer = new FileWriter(tempFile)) {
+        try (var writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
             FileSerde.writeAll(writer, Flux.fromIterable(applications)).block();
         }
 

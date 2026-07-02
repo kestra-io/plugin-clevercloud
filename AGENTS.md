@@ -76,6 +76,7 @@ plugin-clevercloud/
 │       ├── ListAddons.java
 │       └── MemberChangeTrigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
+│   ├── AbstractClevercloudTest.java
 │   ├── deployments/
 │   │   ├── ListTest.java
 │   │   ├── GetTest.java
@@ -88,7 +89,8 @@ plugin-clevercloud/
 │       ├── RemoveMemberTest.java
 │       ├── ListApplicationsTest.java
 │       ├── ListAddonsTest.java
-│       └── MemberChangeTriggerTest.java
+│       ├── MemberChangeTriggerTest.java
+│       └── TestTasks.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
@@ -103,11 +105,12 @@ plugin-clevercloud/
 
 - `apiToken` is the single credential for the whole plugin and must be marked `@PluginProperty(group = "connection", secret = true)`.
 - The default base URL is `https://api-bridge.clever-cloud.com/v2`. `baseUrl()` is overridable per class (used by tests to point at WireMock).
-- `organisationId` is optional on every task and trigger: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`.
+- `organisationId` is optional on `Get`, `ListApplications`, and `ListAddons`: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`. It is required on `ListMembers`, `AddMember`, `RemoveMember`, and `MemberChangeTrigger` because `/self/members` does not exist on the Clever Cloud API.
 - Base the wording on the implemented packages and classes, not on template README text.
 - `Trigger` (deployments) and `MemberChangeTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
-- `MemberChangeTrigger` uses `runContext.namespaceKv()` to persist the member ID set between evaluations (no timestamps in the members response).
-- `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use ListMembers/ListApplications for user accounts.
+- `MemberChangeTrigger` uses `runContext.namespaceKv()` to persist the member ID set between evaluations (no timestamps in the members response), keyed by flow id + trigger id + organisation id so triggers with the same id in different flows do not collide.
+- `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use ListApplications/ListAddons for personal accounts.
+- Organisation task/trigger tests extend `io.kestra.plugin.clevercloud.AbstractClevercloudTest` for shared `@KestraTest`/`@WireMockTest` wiring and WireMock helpers, and use the `TestTasks` nested Testable subclasses (`organisations/TestTasks.java`) instead of one file per task.
 
 ## References
 

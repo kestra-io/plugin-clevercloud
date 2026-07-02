@@ -70,8 +70,12 @@ public class RemoveMember extends AbstractCleverCloudConnection implements Runna
     public VoidOutput run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
 
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
-        var rUserId = runContext.render(userId).as(String.class).orElseThrow();
+        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("organisationId is required for RemoveMember because /self/members does not exist")
+        );
+        var rUserId = runContext.render(userId).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("userId is required for RemoveMember")
+        );
 
         var url = join(baseUrl(), "organisations/" + rOrgId + "/members/" + rUserId);
 

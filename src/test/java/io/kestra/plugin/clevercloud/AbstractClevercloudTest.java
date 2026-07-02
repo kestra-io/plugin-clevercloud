@@ -1,0 +1,50 @@
+package io.kestra.plugin.clevercloud;
+
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder;
+import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.runners.RunContext;
+import io.kestra.core.runners.RunContextFactory;
+import jakarta.inject.Inject;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
+
+/**
+ * Shared WireMock/Kestra test wiring for the organisations task and trigger tests. Both
+ * {@code @KestraTest} and {@code @WireMockTest} apply to subclasses without being redeclared:
+ * JUnit 5 resolves class-level meta-annotations up the superclass hierarchy.
+ */
+@KestraTest
+@WireMockTest
+public abstract class AbstractClevercloudTest {
+
+    @Inject
+    protected RunContextFactory runContextFactory;
+
+    protected RunContext runContext() {
+        return runContextFactory.of();
+    }
+
+    protected static void stubGetJson(String path, String jsonBody) {
+        stubFor(get(urlPathEqualTo(path)).willReturn(okJson(jsonBody)));
+    }
+
+    protected static void verifyBearerAuth(RequestPatternBuilder request, String token) {
+        verify(request.withHeader("Authorization", equalTo("Bearer " + token)));
+    }
+
+    /**
+     * Asserts a GET was never sent under the given path pattern, used to confirm the /self path
+     * was taken instead of /organisations/{id} when organisationId is omitted.
+     */
+    protected static void verifyNeverCalled(String urlPathRegex) {
+        verify(0, getRequestedFor(urlPathMatching(urlPathRegex)));
+    }
+}

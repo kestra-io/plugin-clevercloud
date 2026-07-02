@@ -87,14 +87,20 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
     public VoidOutput run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
 
-        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow();
-        var rEmail = runContext.render(email).as(String.class).orElseThrow();
-        var rRole = runContext.render(role).as(OrgRole.class).orElseThrow();
+        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("organisationId is required for AddMember because /self/members does not exist")
+        );
+        var rEmail = runContext.render(email).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("email is required for AddMember")
+        );
+        var rRole = runContext.render(role).as(OrgRole.class).orElseThrow(
+            () -> new IllegalArgumentException("role is required for AddMember")
+        );
 
         var url = join(baseUrl(), "organisations/" + rOrgId + "/members");
         var body = Map.of("email", rEmail, "role", rRole.name());
 
-        logger.info("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);
+        logger.debug("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);
         makeCall(runContext, buildPostRequest(url, body));
 
         return null;

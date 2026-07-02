@@ -1,58 +1,64 @@
 package io.kestra.plugin.clevercloud.organisations;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
-import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
-import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.FileSerde;
+import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@KestraTest
-@WireMockTest
-class ListMembersTest {
-
-    @Inject
-    RunContextFactory runContextFactory;
+class ListMembersTest extends AbstractClevercloudTest {
 
     @Test
     void parseMemberListResponse(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
-            .willReturn(okJson("""
-                [
-                  {
-                    "member": {
-                      "id": "user_251a73ad-e581-4da2-bcff-7fc798fad2f7",
-                      "email": "admin@example.com",
-                      "name": "Alice Admin",
-                      "avatar": "https://example.com/avatar.png",
-                      "preferredMFA": "NONE"
-                    },
-                    "role": "ADMIN",
-                    "job": "owner"
-                  },
-                  {
-                    "member": {
-                      "id": "user_b2c3d4e5-f6a7-4b8c-9d0e-f1a2b3c4d5e6",
-                      "email": "dev@example.com",
-                      "name": "Bob Developer",
-                      "avatar": null,
-                      "preferredMFA": "TOTP"
-                    },
-                    "role": "DEVELOPER",
-                    "job": null
-                  }
-                ]
-                """)));
+        stubGetJson("/organisations/orga_test/members", """
+            [
+              {
+                "member": {
+                  "id": "user_251a73ad-e581-4da2-bcff-7fc798fad2f7",
+                  "email": "admin@example.com",
+                  "name": "Alice Admin",
+                  "avatar": "https://example.com/avatar.png",
+                  "preferredMFA": "NONE"
+                },
+                "role": "ADMIN",
+                "job": "owner"
+              },
+              {
+                "member": {
+                  "id": "user_b2c3d4e5-f6a7-4b8c-9d0e-f1a2b3c4d5e6",
+                  "email": "dev@example.com",
+                  "name": "Bob Developer",
+                  "avatar": null,
+                  "preferredMFA": "TOTP"
+                },
+                "role": "DEVELOPER",
+                "job": null
+              }
+            ]
+            """);
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -60,8 +66,7 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        var output = task.run(runContext);
+        var output = task.run(runContext());
 
         assertThat(output.getTotal(), is(2));
         assertThat(output.getMembers(), hasSize(2));
@@ -81,10 +86,9 @@ class ListMembersTest {
 
     @Test
     void handleEmptyMemberList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_empty/members"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/organisations/orga_empty/members", "[]");
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-empty-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -92,8 +96,7 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        var output = task.run(runContext);
+        var output = task.run(runContext());
 
         assertThat(output.getTotal(), is(0));
         assertThat(output.getMembers(), is(empty()));
@@ -101,10 +104,9 @@ class ListMembersTest {
 
     @Test
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_abc123/members"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/organisations/orga_abc123/members", "[]");
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-auth-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -112,19 +114,16 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
-        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_abc123/members"))
-            .withHeader("Authorization", equalTo("Bearer my-secret-token")));
+        verifyBearerAuth(getRequestedFor(urlPathEqualTo("/organisations/orga_abc123/members")), "my-secret-token");
     }
 
     @Test
     void requestUrlContainsOrgIdAndMembersPath(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_abc123/members"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/organisations/orga_abc123/members", "[]");
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-url-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -132,8 +131,7 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
         verify(getRequestedFor(urlPathEqualTo("/organisations/orga_abc123/members")));
     }
@@ -143,7 +141,7 @@ class ListMembersTest {
         stubFor(get(urlEqualTo("/organisations/orga_test/members"))
             .willReturn(okJson("[]")));
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-trailing-slash-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -151,23 +149,21 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl() + "/")
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
         verify(getRequestedFor(urlEqualTo("/organisations/orga_test/members")));
     }
 
     @Test
     void fetchTypeFetchReturnsFullListInOutput(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
-            .willReturn(okJson("""
-                [
-                  {"member": {"id": "user_fetch-1"}, "role": "ADMIN"},
-                  {"member": {"id": "user_fetch-2"}, "role": "DEVELOPER"}
-                ]
-                """)));
+        stubGetJson("/organisations/orga_test/members", """
+            [
+              {"member": {"id": "user_fetch-1"}, "role": "ADMIN"},
+              {"member": {"id": "user_fetch-2"}, "role": "DEVELOPER"}
+            ]
+            """);
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-fetch-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -176,8 +172,7 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        var output = task.run(runContext);
+        var output = task.run(runContext());
 
         assertThat(output.getTotal(), is(2));
         assertThat(output.getMembers(), hasSize(2));
@@ -187,15 +182,14 @@ class ListMembersTest {
 
     @Test
     void fetchTypeStoreWritesIonFileToInternalStorage(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
-            .willReturn(okJson("""
-                [
-                  {"member": {"id": "user_store-1"}, "role": "ADMIN"},
-                  {"member": {"id": "user_store-2"}, "role": "DEVELOPER"}
-                ]
-                """)));
+        stubGetJson("/organisations/orga_test/members", """
+            [
+              {"member": {"id": "user_store-1"}, "role": "ADMIN"},
+              {"member": {"id": "user_store-2"}, "role": "DEVELOPER"}
+            ]
+            """);
 
-        var task = TestableListMembers.builder()
+        var task = TestTasks.TestableListMembers.builder()
             .id("list-members-store-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -204,7 +198,7 @@ class ListMembersTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
+        var runContext = runContext();
         var output = task.run(runContext);
 
         assertThat(output.getTotal(), is(2));
@@ -218,5 +212,40 @@ class ListMembersTest {
             assertThat(stored.get(0).getMember().getId(), is("user_store-1"));
             assertThat(stored.get(1).getMember().getId(), is("user_store-2"));
         }
+    }
+
+    @Test
+    void throwsClearExceptionWhenOrganisationIdMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        var task = TestTasks.TestableListMembers.builder()
+            .id("list-members-missing-org-test")
+            .type(ListMembers.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var runContext = runContext();
+        var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("organisationId is required for ListMembers"));
+    }
+
+    @Test
+    void throwsCleanExceptionOn500WithoutBodyLeak(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
+            .willReturn(aResponse().withStatus(500)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"id\":9999,\"message\":\"Internal database connection leaked at host db-primary-42\",\"type\":\"error\"}")));
+
+        var task = TestTasks.TestableListMembers.builder()
+            .id("list-members-500-test")
+            .type(ListMembers.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var runContext = runContext();
+        var ex = assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("500"));
+        assertThat(ex.getMessage(), not(containsString("db-primary-42")));
     }
 }

@@ -1,69 +1,70 @@
 package io.kestra.plugin.clevercloud.organisations;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
-import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
-import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.FileSerde;
+import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.organisations.model.Application;
-import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
-@KestraTest
-@WireMockTest
-class ListApplicationsTest {
-
-    @Inject
-    RunContextFactory runContextFactory;
+class ListApplicationsTest extends AbstractClevercloudTest {
 
     @Test
     void parseApplicationListResponse(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications"))
-            .willReturn(okJson("""
-                [
-                  {
-                    "id": "app_cb34839b-18d9-4975-ac8c-946bd1576361",
-                    "name": "kestra",
-                    "description": "kestra app",
-                    "zone": "par",
-                    "zoneId": "aad32a21-24f8-40b3-a750-baab218d927b",
-                    "instance": {
-                      "type": "node",
-                      "version": "20260617",
-                      "variant": {
-                        "id": "395103fb-d6e2-4fdd-93bc-bc99146f1ea2",
-                        "slug": "node",
-                        "name": "Node.js & Bun"
-                      }
-                    },
-                    "extraField": "should be ignored"
-                  },
-                  {
-                    "id": "app_def456",
-                    "name": "api-gateway",
-                    "description": "REST API gateway",
-                    "zone": "par",
-                    "zoneId": "aad32a21-24f8-40b3-a750-baab218d927b",
-                    "instance": {
-                      "type": "java",
-                      "version": "21",
-                      "variant": {
-                        "id": "java-variant-id",
-                        "slug": "java",
-                        "name": "Java"
-                      }
-                    }
+        stubGetJson("/organisations/orga_test/applications", """
+            [
+              {
+                "id": "app_cb34839b-18d9-4975-ac8c-946bd1576361",
+                "name": "kestra",
+                "description": "kestra app",
+                "zone": "par",
+                "zoneId": "aad32a21-24f8-40b3-a750-baab218d927b",
+                "instance": {
+                  "type": "node",
+                  "version": "20260617",
+                  "variant": {
+                    "id": "395103fb-d6e2-4fdd-93bc-bc99146f1ea2",
+                    "slug": "node",
+                    "name": "Node.js & Bun"
                   }
-                ]
-                """)));
+                },
+                "extraField": "should be ignored"
+              },
+              {
+                "id": "app_def456",
+                "name": "api-gateway",
+                "description": "REST API gateway",
+                "zone": "par",
+                "zoneId": "aad32a21-24f8-40b3-a750-baab218d927b",
+                "instance": {
+                  "type": "java",
+                  "version": "21",
+                  "variant": {
+                    "id": "java-variant-id",
+                    "slug": "java",
+                    "name": "Java"
+                  }
+                }
+              }
+            ]
+            """);
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -71,8 +72,7 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        var output = task.run(runContext);
+        var output = task.run(runContext());
 
         assertThat(output.getTotal(), is(2));
         assertThat(output.getApplications(), hasSize(2));
@@ -92,10 +92,9 @@ class ListApplicationsTest {
 
     @Test
     void handleEmptyApplicationList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_empty/applications"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/organisations/orga_empty/applications", "[]");
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-empty-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -103,8 +102,7 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        var output = task.run(runContext);
+        var output = task.run(runContext());
 
         assertThat(output.getTotal(), is(0));
         assertThat(output.getApplications(), is(empty()));
@@ -112,10 +110,9 @@ class ListApplicationsTest {
 
     @Test
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/organisations/orga_test/applications", "[]");
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-auth-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -123,19 +120,16 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
-        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications"))
-            .withHeader("Authorization", equalTo("Bearer my-secret-token")));
+        verifyBearerAuth(getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications")), "my-secret-token");
     }
 
     @Test
     void usesOrganisationPathWhenOrgIdProvided(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_abc123/applications"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/organisations/orga_abc123/applications", "[]");
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-org-path-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -143,29 +137,26 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
         verify(getRequestedFor(urlPathEqualTo("/organisations/orga_abc123/applications")));
     }
 
     @Test
     void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/self/applications"))
-            .willReturn(okJson("[]")));
+        stubGetJson("/self/applications", "[]");
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-self-path-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
         verify(getRequestedFor(urlPathEqualTo("/self/applications")));
-        verify(0, getRequestedFor(urlPathMatching("/organisations/.*")));
+        verifyNeverCalled("/organisations/.*");
     }
 
     @Test
@@ -173,7 +164,7 @@ class ListApplicationsTest {
         stubFor(get(urlEqualTo("/organisations/orga_test/applications"))
             .willReturn(okJson("[]")));
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-trailing-slash-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -181,23 +172,21 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl() + "/")
             .build();
 
-        var runContext = runContextFactory.of();
-        task.run(runContext);
+        task.run(runContext());
 
         verify(getRequestedFor(urlEqualTo("/organisations/orga_test/applications")));
     }
 
     @Test
     void fetchTypeFetchOneReturnsFirstApplication(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications"))
-            .willReturn(okJson("""
-                [
-                  {"id": "app_one-1", "name": "first"},
-                  {"id": "app_one-2", "name": "second"}
-                ]
-                """)));
+        stubGetJson("/organisations/orga_test/applications", """
+            [
+              {"id": "app_one-1", "name": "first"},
+              {"id": "app_one-2", "name": "second"}
+            ]
+            """);
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-fetch-one-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -206,8 +195,7 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
-        var output = task.run(runContext);
+        var output = task.run(runContext());
 
         assertThat(output.getTotal(), is(2));
         assertThat(output.getApplication(), is(notNullValue()));
@@ -218,15 +206,14 @@ class ListApplicationsTest {
 
     @Test
     void fetchTypeStoreWritesIonFileToInternalStorage(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/applications"))
-            .willReturn(okJson("""
-                [
-                  {"id": "app_store-1", "name": "first"},
-                  {"id": "app_store-2", "name": "second"}
-                ]
-                """)));
+        stubGetJson("/organisations/orga_test/applications", """
+            [
+              {"id": "app_store-1", "name": "first"},
+              {"id": "app_store-2", "name": "second"}
+            ]
+            """);
 
-        var task = TestableListApplications.builder()
+        var task = TestTasks.TestableListApplications.builder()
             .id("list-apps-store-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -235,7 +222,7 @@ class ListApplicationsTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        var runContext = runContextFactory.of();
+        var runContext = runContext();
         var output = task.run(runContext);
 
         assertThat(output.getTotal(), is(2));
