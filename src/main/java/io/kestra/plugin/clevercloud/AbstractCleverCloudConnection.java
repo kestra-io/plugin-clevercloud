@@ -9,7 +9,9 @@ import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.Task;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -18,8 +20,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
+import reactor.core.publisher.Flux;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -30,6 +37,9 @@ public abstract class AbstractCleverCloudConnection extends Task {
 
     public static final String DEFAULT_BASE_URL = "https://api-bridge.clever-cloud.com/v2";
     private static final String JSON_CONTENT_TYPE = "application/json; charset=UTF-8";
+    private static final String ORGANISATIONS_SEGMENT = "organisations";
+    private static final String SELF_SEGMENT = "self";
+    private static final String MEMBERS_SEGMENT = "members";
 
     public static final ObjectMapper MAPPER = JacksonMapper.ofJson();
 
@@ -48,9 +58,17 @@ public abstract class AbstractCleverCloudConnection extends Task {
 
     public static String resourceBase(String organisationId) {
         if (organisationId != null && !organisationId.isBlank()) {
-            return "organisations/" + organisationId;
+            return ORGANISATIONS_SEGMENT + "/" + encodeSegment(organisationId);
         }
-        return "self";
+        return SELF_SEGMENT;
+    }
+
+    /**
+     * Encodes a single dynamic path segment so ids containing reserved URL characters
+     * (e.g. a slash) cannot alter the target path of the request.
+     */
+    protected static String encodeSegment(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
     /**
@@ -59,6 +77,22 @@ public abstract class AbstractCleverCloudConnection extends Task {
      */
     public static String join(String base, String path) {
         return base.replaceAll("/+$", "") + "/" + path.replaceAll("^/+", "");
+    }
+
+    /**
+     * Builds a resource URL under the organisation or personal account base, e.g. .../organisations/{id}/applications
+     * or .../self/addons. Used by endpoints that support both the organisation and personal account scope.
+     */
+    public static String resourceUrl(String baseUrl, String organisationId, String path) {
+        return join(baseUrl, resourceBase(organisationId)) + "/" + path;
+    }
+
+    /**
+     * Builds the members URL under an organisation. Unlike other resources, /self/members does not exist
+     * on the Clever Cloud API, so this always targets /organisations/{id}/members.
+     */
+    public static String membersUrl(String baseUrl, String organisationId) {
+        return join(baseUrl, ORGANISATIONS_SEGMENT + "/" + encodeSegment(organisationId) + "/" + MEMBERS_SEGMENT);
     }
 
     public String makeCall(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder) throws Exception {
@@ -133,5 +167,32 @@ public abstract class AbstractCleverCloudConnection extends Task {
         return HttpRequest.builder()
             .uri(URI.create(url))
             .method("DELETE");
+    }
+
+    /**
+     * Shared FetchType handling for list tasks: FETCH keeps all items, FETCH_ONE keeps the first,
+     * STORE writes the items to an ion file in internal storage, NONE keeps only the count.
+     */
+    protected static <T> FetchResult<T> fetchOutput(RunContext runContext, Property<FetchType> fetchType, List<T> items) throws Exception {
+        var total = items.size();
+        return switch (runContext.render(fetchType).as(FetchType.class).orElseThrow()) {
+            case FETCH -> new FetchResult<>(items, null, null, total);
+            case FETCH_ONE -> new FetchResult<>(null, items.isEmpty() ? null : items.getFirst(), null, total);
+            case STORE -> new FetchResult<>(null, null, store(runContext, items), total);
+            case NONE -> new FetchResult<>(null, null, null, total);
+        };
+    }
+
+    private static <T> URI store(RunContext runContext, List<T> items) throws Exception {
+        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
+
+        try (var writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
+            FileSerde.writeAll(writer, Flux.fromIterable(items)).block();
+        }
+
+        return runContext.storage().putFile(tempFile);
+    }
+
+    public record FetchResult<T>(List<T> items, T first, URI uri, int total) {
     }
 }

@@ -16,3 +16,10 @@ out/
 src/test/resources/application-test.yml
 .factorypath
 bin/
+
+# Kestra core resources unpacked by the build/doc tooling
+/docs/
+/icons/
+/metadata/
+/logback/
+/requirements.txt

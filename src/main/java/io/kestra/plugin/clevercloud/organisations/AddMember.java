@@ -1,0 +1,102 @@
+package io.kestra.plugin.clevercloud.organisations;
+
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.VoidOutput;
+import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
+import io.kestra.plugin.clevercloud.organisations.model.OrgRole;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
+
+import java.util.Map;
+
+@SuperBuilder
+@ToString
+@EqualsAndHashCode
+@Getter
+@NoArgsConstructor
+@Schema(
+    title = "Add a member to a Clever Cloud organisation",
+    description = """
+        Invites a user to the organisation by email and assigns them a role.
+        organisationId is required since /self/members does not exist.
+        """
+)
+@Plugin(
+    examples = {
+        @Example(
+            title = "Add a developer to an organisation",
+            full = true,
+            code = """
+                id: add_org_member
+                namespace: company.team
+
+                tasks:
+                  - id: add
+                    type: io.kestra.plugin.clevercloud.organisations.AddMember
+                    apiToken: "{{ secret('CC_API_TOKEN') }}"
+                    organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    email: "developer@example.com"
+                    role: DEVELOPER
+                """
+        )
+    }
+)
+public class AddMember extends AbstractCleverCloudConnection implements RunnableTask<VoidOutput> {
+
+    @Schema(
+        title = "Organisation ID",
+        description = "Required. The /self/members endpoint does not exist on the Clever Cloud API."
+    )
+    @PluginProperty(group = "main")
+    @NotNull
+    private Property<String> organisationId;
+
+    @Schema(
+        title = "Email address of the user to add",
+        description = "The user will be invited to the organisation at this address."
+    )
+    @PluginProperty(group = "main")
+    @NotNull
+    private Property<String> email;
+
+    @Schema(
+        title = "Role to assign to the new member",
+        description = "One of ADMIN, MANAGER, DEVELOPER, ACCOUNTING, or READ_ONLY."
+    )
+    @PluginProperty(group = "main")
+    @NotNull
+    private Property<OrgRole> role;
+
+    @Override
+    public VoidOutput run(RunContext runContext) throws Exception {
+        var logger = runContext.logger();
+
+        var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("organisationId is required for AddMember because /self/members does not exist")
+        );
+        var rEmail = runContext.render(email).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("email is required for AddMember")
+        );
+        var rRole = runContext.render(role).as(OrgRole.class).orElseThrow(
+            () -> new IllegalArgumentException("role is required for AddMember")
+        );
+
+        var url = membersUrl(baseUrl(), rOrgId);
+        var body = Map.of("email", rEmail, "role", rRole.name());
+
+        logger.debug("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);
+        makeCall(runContext, buildPostRequest(url, body));
+
+        return null;
+    }
+}
