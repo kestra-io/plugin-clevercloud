@@ -6,11 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-/**
- * Test-only subclasses that override baseUrl() to point at a WireMock server instead of the
- * real Clever Cloud API. Grouped in a single file since each subclass extends a different task
- * or trigger and single inheritance rules out a shared Testable base class.
- */
+// Test-only baseUrl() overrides pointing at WireMock, grouped here since single inheritance
+// rules out a shared Testable base class for these subclasses of different tasks/trigger.
 public final class TestTasks {
 
     private TestTasks() {

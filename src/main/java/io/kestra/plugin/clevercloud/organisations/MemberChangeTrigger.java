@@ -165,15 +165,13 @@ public class MemberChangeTrigger extends AbstractTrigger
             .map(m -> m.getMember().getId())
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        // Persist state in namespace KV keyed by flow ID + trigger ID so multiple triggers on the
-        // same org, including from different flows sharing a trigger id, do not interfere with each other.
+        // Key includes flowId so triggers sharing a triggerId across flows don't clobber each other's baseline.
         var kvKey = "member-trigger-" + context.getFlowId() + "-" + context.getTriggerId() + "-" + rOrgId;
         var kv = runContext.namespaceKv(context.getNamespace());
 
         var previousIdsOptional = kv.getValue(kvKey);
 
         if (previousIdsOptional.isEmpty()) {
-            // First evaluation: establish baseline, do not fire.
             logger.info("Establishing member baseline for organisation {} ({} member(s))", rOrgId, currentIds.size());
             kv.put(kvKey, new KVValueAndMetadata(new KVMetadata(null, (java.time.Duration) null),
                 serializeIds(currentIds)));

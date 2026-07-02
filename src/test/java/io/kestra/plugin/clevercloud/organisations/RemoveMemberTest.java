@@ -21,7 +21,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
 
     @Test
     void sendsDeleteRequestWithUserIdInUrl(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        // CC API returns 200 with empty body on successful removal.
+        // The real API returns 200 with an empty body on successful removal, not 204.
         stubFor(delete(urlPathEqualTo("/organisations/orga_test/members/user_abc-001"))
             .willReturn(ok()));
 
@@ -73,7 +73,6 @@ class RemoveMemberTest extends AbstractClevercloudTest {
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
-        // Should not throw on 204.
         task.run(runContext());
     }
 

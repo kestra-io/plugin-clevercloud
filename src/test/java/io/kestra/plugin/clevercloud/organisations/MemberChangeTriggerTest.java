@@ -55,8 +55,7 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
     }
 
     private ConditionContext conditionContext(MemberChangeTrigger trigger, TriggerContext triggerContext, String flowId) throws Exception {
-        // tenantId must be non-null so namespaceKv can build valid storage paths.
-        // The local storage backend uses tenant as a path segment and fails with NPE on null.
+        // tenantId must be non-null: the local storage backend uses it as a path segment and NPEs otherwise.
         var flow = Flow.builder()
             .id(flowId)
             .namespace("company.team")
@@ -310,12 +309,8 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
 
     @Test
     void sameTriggerIdInDifferentFlowsDoNotShareKvBaseline(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        // Regression test: the KV key must include flowId, otherwise two flows using the same
-        // trigger id on the same organisation would clobber each other's baseline.
-        //
-        // Both triggers below share the same triggerId on purpose: before the fix, the KV key was
-        // "member-trigger-<triggerId>-<orgId>" with no flowId, so triggerB's poll would read and
-        // overwrite triggerA's baseline entry.
+        // Regression test: the KV key must include flowId, or two flows sharing a triggerId on the
+        // same org would clobber each other's baseline (both triggers below share one on purpose).
         triggerId = buildTriggerId();
         stubFor(get(urlPathEqualTo("/organisations/orga_test/members"))
             .inScenario("flow-isolation")
@@ -336,7 +331,6 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
         var trigCtxA = triggerContext("flow-a");
         var condCtxA = conditionContext(triggerA, trigCtxA, "flow-a");
 
-        // Establish baseline for flow-a: {user_aaa}.
         var resultA1 = triggerA.evaluate(condCtxA, trigCtxA);
         assertThat("flow-a first evaluation must not fire", resultA1.isEmpty(), is(true));
 
@@ -344,15 +338,12 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
         var trigCtxB = triggerContext("flow-b");
         var condCtxB = conditionContext(triggerB, trigCtxB, "flow-b");
 
-        // flow-b's first evaluation sees {user_aaa, user_bbb} but must still establish its own
-        // baseline and not fire, since it is its own first evaluation. If the KV key collided on
-        // trigger id alone, this would instead compare against flow-a's stored baseline and fire.
+        // If the KV key collided on trigger id alone, flow-b would compare against flow-a's baseline and fire here.
         var resultB1 = triggerB.evaluate(condCtxB, trigCtxB);
         assertThat("flow-b first evaluation must not fire, since it establishes its own baseline",
             resultB1.isEmpty(), is(true));
 
-        // flow-a polls again and sees {user_aaa} again, unchanged from its own baseline. If flow-b's
-        // poll had clobbered the shared KV entry, this would incorrectly detect user_bbb as removed.
+        // If flow-b's poll had clobbered the shared KV entry, this would incorrectly detect user_bbb as removed.
         var resultA2 = triggerA.evaluate(condCtxA, trigCtxA);
         assertThat("flow-a must not fire on its own unchanged member set", resultA2.isEmpty(), is(true));
     }

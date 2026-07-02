@@ -16,11 +16,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 
-/**
- * Shared WireMock/Kestra test wiring for the organisations task and trigger tests. Both
- * {@code @KestraTest} and {@code @WireMockTest} apply to subclasses without being redeclared:
- * JUnit 5 resolves class-level meta-annotations up the superclass hierarchy.
- */
+// @KestraTest and @WireMockTest apply to subclasses without being redeclared: JUnit 5 resolves
+// class-level meta-annotations up the superclass hierarchy.
 @KestraTest
 @WireMockTest
 public abstract class AbstractClevercloudTest {
@@ -40,10 +37,7 @@ public abstract class AbstractClevercloudTest {
         verify(request.withHeader("Authorization", equalTo("Bearer " + token)));
     }
 
-    /**
-     * Asserts a GET was never sent under the given path pattern, used to confirm the /self path
-     * was taken instead of /organisations/{id} when organisationId is omitted.
-     */
+    // Confirms the /self path was taken instead of /organisations/{id} when organisationId is omitted.
     protected static void verifyNeverCalled(String urlPathRegex) {
         verify(0, getRequestedFor(urlPathMatching(urlPathRegex)));
     }
