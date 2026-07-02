@@ -8,7 +8,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Addon;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -18,11 +17,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import reactor.core.publisher.Flux;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -90,7 +86,7 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
         var logger = runContext.logger();
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
-        var url = join(baseUrl(), resourceBase(rOrgId)) + "/addons";
+        var url = resourceUrl(baseUrl(), rOrgId, "addons");
 
         logger.info("Listing add-ons for {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
         var body = makeCall(runContext, buildGetRequest(url));
@@ -98,27 +94,13 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
 
         logger.info("Found {} add-on(s)", addons.size());
 
-        var outputBuilder = Output.builder().total(addons.size());
-
-        switch (runContext.render(fetchType).as(FetchType.class).orElseThrow()) {
-            case FETCH -> outputBuilder.addons(addons);
-            case FETCH_ONE -> outputBuilder.addon(addons.isEmpty() ? null : addons.getFirst());
-            case STORE -> outputBuilder.uri(store(runContext, addons));
-            case NONE -> {
-            }
-        }
-
-        return outputBuilder.build();
-    }
-
-    private URI store(RunContext runContext, List<Addon> addons) throws Exception {
-        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
-
-        try (var writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
-            FileSerde.writeAll(writer, Flux.fromIterable(addons)).block();
-        }
-
-        return runContext.storage().putFile(tempFile);
+        var result = fetchOutput(runContext, fetchType, addons);
+        return Output.builder()
+            .addons(result.items())
+            .addon(result.first())
+            .uri(result.uri())
+            .total(result.total())
+            .build();
     }
 
     @Builder

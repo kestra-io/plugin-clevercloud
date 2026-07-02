@@ -15,6 +15,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.storages.kv.KVMetadata;
+import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
@@ -148,7 +149,7 @@ public class MemberChangeTrigger extends AbstractTrigger
         );
         var rEvent = runContext.render(event).as(MemberEvent.class).orElse(MemberEvent.MEMBER_CHANGED);
 
-        var url = AbstractCleverCloudConnection.join(baseUrl(), "organisations/" + rOrgId + "/members");
+        var url = AbstractCleverCloudConnection.membersUrl(baseUrl(), rOrgId);
 
         logger.debug("Polling members for organisation {}", rOrgId);
 
@@ -173,8 +174,7 @@ public class MemberChangeTrigger extends AbstractTrigger
 
         if (previousIdsOptional.isEmpty()) {
             logger.info("Establishing member baseline for organisation {} ({} member(s))", rOrgId, currentIds.size());
-            kv.put(kvKey, new KVValueAndMetadata(new KVMetadata(null, (java.time.Duration) null),
-                serializeIds(currentIds)));
+            persistIds(kv, kvKey, currentIds);
             return Optional.empty();
         }
 
@@ -195,8 +195,7 @@ public class MemberChangeTrigger extends AbstractTrigger
 
         // Always persist the latest member set so the next poll diffs against it.
         if (hasChange) {
-            kv.put(kvKey, new KVValueAndMetadata(new KVMetadata(null, (java.time.Duration) null),
-                serializeIds(currentIds)));
+            persistIds(kv, kvKey, currentIds);
         }
 
         if (!matches) {
@@ -214,8 +213,9 @@ public class MemberChangeTrigger extends AbstractTrigger
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
     }
 
-    private static String serializeIds(Set<String> ids) throws Exception {
-        return AbstractCleverCloudConnection.MAPPER.writeValueAsString(ids);
+    private static void persistIds(KVStore kv, String kvKey, Set<String> ids) throws Exception {
+        var value = AbstractCleverCloudConnection.MAPPER.writeValueAsString(ids);
+        kv.put(kvKey, new KVValueAndMetadata(new KVMetadata(null, (Duration) null), value));
     }
 
     @SuppressWarnings("unchecked")

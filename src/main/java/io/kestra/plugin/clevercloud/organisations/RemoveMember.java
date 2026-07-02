@@ -77,7 +77,7 @@ public class RemoveMember extends AbstractCleverCloudConnection implements Runna
             () -> new IllegalArgumentException("userId is required for RemoveMember")
         );
 
-        var url = join(baseUrl(), "organisations/" + rOrgId + "/members/" + rUserId);
+        var url = membersUrl(baseUrl(), rOrgId) + "/" + rUserId;
 
         logger.info("Removing member {} from organisation {}", rUserId, rOrgId);
         makeCall(runContext, buildDeleteRequest(url));

@@ -97,7 +97,7 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
             () -> new IllegalArgumentException("role is required for AddMember")
         );
 
-        var url = join(baseUrl(), "organisations/" + rOrgId + "/members");
+        var url = membersUrl(baseUrl(), rOrgId);
         var body = Map.of("email", rEmail, "role", rRole.name());
 
         logger.debug("Adding member {} with role {} to organisation {}", rEmail, rRole, rOrgId);

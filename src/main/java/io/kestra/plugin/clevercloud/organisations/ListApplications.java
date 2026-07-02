@@ -8,7 +8,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Application;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -18,11 +17,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import reactor.core.publisher.Flux;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -90,7 +86,7 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
         var logger = runContext.logger();
 
         var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
-        var url = join(baseUrl(), resourceBase(rOrgId)) + "/applications";
+        var url = resourceUrl(baseUrl(), rOrgId, "applications");
 
         logger.info("Listing applications for {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
         var body = makeCall(runContext, buildGetRequest(url));
@@ -98,27 +94,13 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
 
         logger.info("Found {} application(s)", applications.size());
 
-        var outputBuilder = Output.builder().total(applications.size());
-
-        switch (runContext.render(fetchType).as(FetchType.class).orElseThrow()) {
-            case FETCH -> outputBuilder.applications(applications);
-            case FETCH_ONE -> outputBuilder.application(applications.isEmpty() ? null : applications.getFirst());
-            case STORE -> outputBuilder.uri(store(runContext, applications));
-            case NONE -> {
-            }
-        }
-
-        return outputBuilder.build();
-    }
-
-    private URI store(RunContext runContext, List<Application> applications) throws Exception {
-        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
-
-        try (var writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
-            FileSerde.writeAll(writer, Flux.fromIterable(applications)).block();
-        }
-
-        return runContext.storage().putFile(tempFile);
+        var result = fetchOutput(runContext, fetchType, applications);
+        return Output.builder()
+            .applications(result.items())
+            .application(result.first())
+            .uri(result.uri())
+            .total(result.total())
+            .build();
     }
 
     @Builder

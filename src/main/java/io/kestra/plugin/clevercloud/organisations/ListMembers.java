@@ -8,7 +8,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,11 +18,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import reactor.core.publisher.Flux;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -82,7 +78,7 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
         var rOrgId = runContext.render(organisationId).as(String.class).orElseThrow(
             () -> new IllegalArgumentException("organisationId is required for ListMembers: /self/members does not exist")
         );
-        var url = join(baseUrl(), "organisations/" + rOrgId + "/members");
+        var url = membersUrl(baseUrl(), rOrgId);
 
         logger.info("Listing members for organisation {}", rOrgId);
         var body = makeCall(runContext, buildGetRequest(url));
@@ -90,27 +86,13 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
 
         logger.info("Found {} member(s)", members.size());
 
-        var outputBuilder = Output.builder().total(members.size());
-
-        switch (runContext.render(fetchType).as(FetchType.class).orElseThrow()) {
-            case FETCH -> outputBuilder.members(members);
-            case FETCH_ONE -> outputBuilder.member(members.isEmpty() ? null : members.getFirst());
-            case STORE -> outputBuilder.uri(store(runContext, members));
-            case NONE -> {
-            }
-        }
-
-        return outputBuilder.build();
-    }
-
-    private URI store(RunContext runContext, List<Member> members) throws Exception {
-        var tempFile = runContext.workingDir().createTempFile(".ion").toFile();
-
-        try (var writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
-            FileSerde.writeAll(writer, Flux.fromIterable(members)).block();
-        }
-
-        return runContext.storage().putFile(tempFile);
+        var result = fetchOutput(runContext, fetchType, members);
+        return Output.builder()
+            .members(result.items())
+            .member(result.first())
+            .uri(result.uri())
+            .total(result.total())
+            .build();
     }
 
     @Builder
