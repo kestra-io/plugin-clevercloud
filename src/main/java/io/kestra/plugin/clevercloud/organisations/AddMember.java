@@ -28,10 +28,7 @@ import java.util.Map;
     title = "Add a member to a Clever Cloud organisation",
     description = """
         Invites a user to the organisation by email and assigns them a role.
-
-        Valid roles: ADMIN, MANAGER, DEVELOPER, ACCOUNTING, READ_ONLY.
-        The user receives an email invitation if they do not already have a Clever Cloud account.
-        organisationId is required: the /self/members endpoint does not exist.
+        organisationId is required since /self/members does not exist.
         """
 )
 @Plugin(
@@ -74,10 +71,7 @@ public class AddMember extends AbstractCleverCloudConnection implements Runnable
 
     @Schema(
         title = "Role to assign to the new member",
-        description = """
-            Accepts: ADMIN (full control), MANAGER, DEVELOPER (can deploy),
-            ACCOUNTING, READ_ONLY (view-only access).
-            """
+        description = "One of ADMIN, MANAGER, DEVELOPER, ACCOUNTING, or READ_ONLY."
     )
     @PluginProperty(group = "main")
     @NotNull

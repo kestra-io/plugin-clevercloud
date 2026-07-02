@@ -32,8 +32,6 @@ import java.util.List;
     description = """
         Returns all add-ons provisioned in the given organisation or personal account.
         When organisationId is omitted, lists add-ons under the personal account via /self.
-        Each entry includes the add-on ID, name, region, provider info, and plan.
-        Use fetchType to control how the add-ons are exposed in the output.
         """
 )
 @Plugin(
@@ -76,7 +74,10 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
     @PluginProperty(group = "main")
     private Property<String> organisationId;
 
-    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ion file and returns its uri, NONE returns nothing but the count")
+    @Schema(
+        title = "How to fetch the results",
+        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ion file, NONE returns only the count."
+    )
     @PluginProperty(group = "processing")
     @Builder.Default
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
@@ -107,13 +108,22 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "List of add-ons in the organisation or personal account", description = "Populated when fetchType is FETCH")
+        @Schema(
+            title = "List of add-ons in the organisation or personal account",
+            description = "Populated when fetchType is FETCH."
+        )
         private final List<Addon> addons;
 
-        @Schema(title = "First add-on returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no add-on was found")
+        @Schema(
+            title = "First add-on returned by the API",
+            description = "Populated when fetchType is FETCH_ONE, null if no add-on was found."
+        )
         private final Addon addon;
 
-        @Schema(title = "URI of the stored add-ons", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage")
+        @Schema(
+            title = "URI of the stored add-ons",
+            description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage."
+        )
         private final URI uri;
 
         @Schema(title = "Total number of add-ons returned")

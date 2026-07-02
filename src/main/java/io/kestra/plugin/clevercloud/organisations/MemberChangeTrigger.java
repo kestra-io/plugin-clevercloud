@@ -43,23 +43,8 @@ import java.util.stream.Collectors;
 @Getter
 @NoArgsConstructor
 @Schema(
-    title = "Trigger when a member is added or removed from a Clever Cloud organisation",
-    description = """
-        Polls the member list of the given organisation at each interval and fires when the
-        member set changes relative to the previous evaluation.
-
-        Dedup strategy: the Clever Cloud members endpoint returns no timestamps, so the trigger
-        persists the current set of member IDs in the namespace KV store after each evaluation
-        and compares against it on the next poll. This avoids any dependency on wall-clock skew.
-
-        The first evaluation always stores the baseline and never fires an execution. Subsequent
-        evaluations fire only when the member set differs from the stored baseline.
-
-        Set the `event` property to MEMBER_ADDED to fire only on additions, MEMBER_REMOVED to fire
-        only on removals, or MEMBER_CHANGED to fire on any change.
-
-        organisationId is required: the /self/members endpoint does not exist on the Clever Cloud API.
-        """
+    title = "Fire when an organisation's member set changes",
+    description = "Polls members each interval and fires on additions and/or removals per the event property. organisationId is required (there is no /self/members endpoint)."
 )
 @Plugin(
     examples = {
@@ -90,11 +75,17 @@ public class MemberChangeTrigger extends AbstractTrigger
     implements PollingTriggerInterface, TriggerOutput<MemberChangeTrigger.Output> {
 
     @NotNull
-    @Schema(title = "API token", description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}.")
+    @Schema(
+        title = "API token",
+        description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}."
+    )
     @PluginProperty(group = "connection", secret = true)
     private Property<String> apiToken;
 
-    @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")
+    @Schema(
+        title = "HTTP client options",
+        description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings."
+    )
     @PluginProperty(group = "advanced")
     HttpConfiguration options;
 
@@ -112,11 +103,7 @@ public class MemberChangeTrigger extends AbstractTrigger
 
     @Schema(
         title = "Which membership event fires the trigger",
-        description = """
-            MEMBER_ADDED fires when a new member appears in the list.
-            MEMBER_REMOVED fires when a member disappears from the list.
-            MEMBER_CHANGED fires on either addition or removal.
-            """
+        description = "One of MEMBER_ADDED, MEMBER_REMOVED, or MEMBER_CHANGED (either addition or removal)."
     )
     @PluginProperty(group = "main")
     @NotNull

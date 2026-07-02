@@ -32,10 +32,7 @@ import java.util.List;
     title = "List members of a Clever Cloud organisation",
     description = """
         Returns all members of the given organisation with their role and job title.
-        Each entry contains a user info object (id, email, name, avatar) along with
-        the role assigned within this organisation.
-        The /self/members endpoint does not exist on the Clever Cloud API, so organisationId is required.
-        Use fetchType to control how the members are exposed in the output.
+        organisationId is required since /self/members does not exist.
         """
 )
 @Plugin(
@@ -66,7 +63,10 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
     @NotNull
     private Property<String> organisationId;
 
-    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ion file and returns its uri, NONE returns nothing but the count")
+    @Schema(
+        title = "How to fetch the results",
+        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ion file, NONE returns only the count."
+    )
     @PluginProperty(group = "processing")
     @Builder.Default
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
@@ -99,13 +99,22 @@ public class ListMembers extends AbstractCleverCloudConnection implements Runnab
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "List of organisation members", description = "Populated when fetchType is FETCH")
+        @Schema(
+            title = "List of organisation members",
+            description = "Populated when fetchType is FETCH."
+        )
         private final List<Member> members;
 
-        @Schema(title = "First member returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no member was found")
+        @Schema(
+            title = "First member returned by the API",
+            description = "Populated when fetchType is FETCH_ONE, null if no member was found."
+        )
         private final Member member;
 
-        @Schema(title = "URI of the stored members", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage")
+        @Schema(
+            title = "URI of the stored members",
+            description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage."
+        )
         private final URI uri;
 
         @Schema(title = "Total number of members returned")

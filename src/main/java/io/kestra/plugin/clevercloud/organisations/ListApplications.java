@@ -30,10 +30,8 @@ import java.util.List;
 @Schema(
     title = "List applications in a Clever Cloud organisation or personal account",
     description = """
-        Returns all applications deployed in the given organisation or personal account.
+        Returns all applications in the given organisation or personal account.
         When organisationId is omitted, lists applications under the personal account via /self.
-        Each entry includes the application ID, name, description, zone, and instance type.
-        Use fetchType to control how the applications are exposed in the output.
         """
 )
 @Plugin(
@@ -76,7 +74,10 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
     @PluginProperty(group = "main")
     private Property<String> organisationId;
 
-    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ion file and returns its uri, NONE returns nothing but the count")
+    @Schema(
+        title = "How to fetch the results",
+        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ion file, NONE returns only the count."
+    )
     @PluginProperty(group = "processing")
     @Builder.Default
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
@@ -107,13 +108,22 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "List of applications in the organisation or personal account", description = "Populated when fetchType is FETCH")
+        @Schema(
+            title = "List of applications in the organisation or personal account",
+            description = "Populated when fetchType is FETCH."
+        )
         private final List<Application> applications;
 
-        @Schema(title = "First application returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no application was found")
+        @Schema(
+            title = "First application returned by the API",
+            description = "Populated when fetchType is FETCH_ONE, null if no application was found."
+        )
         private final Application application;
 
-        @Schema(title = "URI of the stored applications", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage")
+        @Schema(
+            title = "URI of the stored applications",
+            description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage."
+        )
         private final URI uri;
 
         @Schema(title = "Total number of applications returned")

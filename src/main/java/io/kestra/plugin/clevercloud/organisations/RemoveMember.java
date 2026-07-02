@@ -24,9 +24,8 @@ import lombok.experimental.SuperBuilder;
 @Schema(
     title = "Remove a member from a Clever Cloud organisation",
     description = """
-        Removes the specified user from the organisation. The user ID can be obtained
-        from the ListMembers task (member.id field).
-        organisationId is required: the /self/members endpoint does not exist.
+        Removes the specified user from the organisation.
+        organisationId is required since /self/members does not exist.
         """
 )
 @Plugin(
