@@ -23,6 +23,7 @@ import lombok.experimental.SuperBuilder;
 import reactor.core.publisher.Flux;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
@@ -57,9 +58,17 @@ public abstract class AbstractCleverCloudConnection extends Task {
 
     public static String resourceBase(String organisationId) {
         if (organisationId != null && !organisationId.isBlank()) {
-            return ORGANISATIONS_SEGMENT + "/" + organisationId;
+            return ORGANISATIONS_SEGMENT + "/" + encodeSegment(organisationId);
         }
         return SELF_SEGMENT;
+    }
+
+    /**
+     * Encodes a single dynamic path segment so ids containing reserved URL characters
+     * (e.g. a slash) cannot alter the target path of the request.
+     */
+    protected static String encodeSegment(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
     /**
@@ -83,7 +92,7 @@ public abstract class AbstractCleverCloudConnection extends Task {
      * on the Clever Cloud API, so this always targets /organisations/{id}/members.
      */
     public static String membersUrl(String baseUrl, String organisationId) {
-        return join(baseUrl, ORGANISATIONS_SEGMENT + "/" + organisationId + "/" + MEMBERS_SEGMENT);
+        return join(baseUrl, ORGANISATIONS_SEGMENT + "/" + encodeSegment(organisationId) + "/" + MEMBERS_SEGMENT);
     }
 
     public String makeCall(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder) throws Exception {

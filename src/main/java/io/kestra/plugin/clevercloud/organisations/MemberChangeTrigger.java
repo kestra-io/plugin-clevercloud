@@ -80,6 +80,7 @@ public class MemberChangeTrigger extends AbstractTrigger
         description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}."
     )
     @PluginProperty(group = "connection", secret = true)
+    @ToString.Exclude
     private Property<String> apiToken;
 
     @Schema(
@@ -157,11 +158,15 @@ public class MemberChangeTrigger extends AbstractTrigger
         var kvKey = "member-trigger-" + context.getFlowId() + "-" + context.getTriggerId() + "-" + rOrgId;
         var kv = runContext.namespaceKv(context.getNamespace());
 
+        // Refreshed every poll while the trigger is active, so a 10x-interval TTL never expires
+        // a live baseline but ages out an orphaned entry a few polls after the trigger stops.
+        var baselineTtl = interval.multipliedBy(10);
+
         var previousIdsOptional = kv.getValue(kvKey);
 
         if (previousIdsOptional.isEmpty()) {
             logger.info("Establishing member baseline for organisation {} ({} member(s))", rOrgId, currentIds.size());
-            persistIds(kv, kvKey, currentIds);
+            persistIds(kv, kvKey, currentIds, baselineTtl);
             return Optional.empty();
         }
 
@@ -182,7 +187,7 @@ public class MemberChangeTrigger extends AbstractTrigger
 
         // Always persist the latest member set so the next poll diffs against it.
         if (hasChange) {
-            persistIds(kv, kvKey, currentIds);
+            persistIds(kv, kvKey, currentIds, baselineTtl);
         }
 
         if (!matches) {
@@ -200,9 +205,9 @@ public class MemberChangeTrigger extends AbstractTrigger
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
     }
 
-    private static void persistIds(KVStore kv, String kvKey, Set<String> ids) throws Exception {
+    private static void persistIds(KVStore kv, String kvKey, Set<String> ids, Duration ttl) throws Exception {
         var value = AbstractCleverCloudConnection.MAPPER.writeValueAsString(ids);
-        kv.put(kvKey, new KVValueAndMetadata(new KVMetadata(null, (Duration) null), value));
+        kv.put(kvKey, new KVValueAndMetadata(new KVMetadata(null, ttl), value));
     }
 
     @SuppressWarnings("unchecked")
