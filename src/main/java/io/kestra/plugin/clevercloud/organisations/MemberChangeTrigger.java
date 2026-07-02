@@ -2,8 +2,6 @@ package io.kestra.plugin.clevercloud.organisations;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.kestra.core.http.HttpRequest;
-import io.kestra.core.http.client.HttpClient;
-import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -154,29 +152,13 @@ public class MemberChangeTrigger extends AbstractTrigger
 
         logger.debug("Polling members for organisation {}", rOrgId);
 
-        String body;
-        try (var client = new HttpClient(runContext, options)) {
-            var request = HttpRequest.builder()
-                .uri(URI.create(url))
-                .method("GET")
-                .addHeader("Authorization", "Bearer " + rApiToken)
-                .addHeader("Content-Type", "application/json; charset=UTF-8")
-                .build();
-            var response = client.request(request, String.class);
-            body = response.getBody() != null ? response.getBody() : "[]";
-        } catch (HttpClientResponseException e) {
-            var status = e.getResponse() != null ? e.getResponse().getStatus().getCode() : -1;
-            logger.debug("Clever Cloud API returned {} on GET {}", status, url);
-            throw new HttpClientResponseException(
-                "Clever Cloud API error " + status + " polling members for " + rOrgId
-                    + ": check apiToken and that the organisation exists",
-                e.getResponse(),
-                e
-            );
-        }
+        var requestBuilder = HttpRequest.builder()
+            .uri(URI.create(url))
+            .method("GET");
+        var body = AbstractCleverCloudConnection.makeCall(runContext, options, requestBuilder, rApiToken, String.class);
 
         var members = AbstractCleverCloudConnection.MAPPER.readValue(
-            body, new TypeReference<ArrayList<Member>>() {});
+            body != null ? body : "[]", new TypeReference<ArrayList<Member>>() {});
 
         var currentIds = members.stream()
             .filter(m -> m.getMember() != null && m.getMember().getId() != null)
