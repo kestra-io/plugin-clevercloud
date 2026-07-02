@@ -16,8 +16,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 
-// @KestraTest and @WireMockTest apply to subclasses without being redeclared: JUnit 5 resolves
-// class-level meta-annotations up the superclass hierarchy.
 @KestraTest
 @WireMockTest
 public abstract class AbstractClevercloudTest {
