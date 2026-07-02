@@ -165,7 +165,7 @@ public class MemberChangeTrigger extends AbstractTrigger
             return Optional.empty();
         }
 
-        Set<String> previousIds = deserializeIds(previousIdsOptional.get().value());
+        var previousIds = deserializeIds(previousIdsOptional.get().value());
 
         var added = new LinkedHashSet<>(currentIds);
         added.removeAll(previousIds);

@@ -13,12 +13,9 @@ public class Organisation {
     private String id;
     private String name;
     private String description;
-    private String zip;
     private String city;
     private String country;
     private String avatar;
     private String email;
-    private String VAT;
-    private String billingEmail;
     private boolean cleverEnterprise;
 }
