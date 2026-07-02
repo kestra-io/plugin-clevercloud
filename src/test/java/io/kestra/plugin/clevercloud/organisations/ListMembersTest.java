@@ -7,6 +7,11 @@ import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.organisations.model.Member;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -58,7 +63,7 @@ class ListMembersTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -88,7 +93,7 @@ class ListMembersTest extends AbstractClevercloudTest {
     void handleEmptyMemberList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_empty/members", "[]");
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-empty-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -106,7 +111,7 @@ class ListMembersTest extends AbstractClevercloudTest {
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_abc123/members", "[]");
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-auth-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -123,7 +128,7 @@ class ListMembersTest extends AbstractClevercloudTest {
     void requestUrlContainsOrgIdAndMembersPath(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_abc123/members", "[]");
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-url-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -141,7 +146,7 @@ class ListMembersTest extends AbstractClevercloudTest {
         stubFor(get(urlEqualTo("/organisations/orga_test/members"))
             .willReturn(okJson("[]")));
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-trailing-slash-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -163,7 +168,7 @@ class ListMembersTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-fetch-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -189,7 +194,7 @@ class ListMembersTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-store-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -216,7 +221,7 @@ class ListMembersTest extends AbstractClevercloudTest {
 
     @Test
     void throwsClearExceptionWhenOrganisationIdMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-missing-org-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -235,7 +240,7 @@ class ListMembersTest extends AbstractClevercloudTest {
                 .withHeader("Content-Type", "application/json")
                 .withBody("{\"id\":9999,\"message\":\"Internal database connection leaked at host db-primary-42\",\"type\":\"error\"}")));
 
-        var task = TestTasks.TestableListMembers.builder()
+        var task = TestableListMembers.builder()
             .id("list-members-500-test")
             .type(ListMembers.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -247,5 +252,20 @@ class ListMembersTest extends AbstractClevercloudTest {
         var ex = assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("500"));
         assertThat(ex.getMessage(), not(containsString("db-primary-42")));
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableListMembers extends ListMembers {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
+        }
     }
 }

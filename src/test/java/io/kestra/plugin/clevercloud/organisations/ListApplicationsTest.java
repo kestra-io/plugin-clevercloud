@@ -6,6 +6,11 @@ import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.organisations.model.Application;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -64,7 +69,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -94,7 +99,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
     void handleEmptyApplicationList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_empty/applications", "[]");
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-empty-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -112,7 +117,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_test/applications", "[]");
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-auth-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -129,7 +134,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
     void usesOrganisationPathWhenOrgIdProvided(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_abc123/applications", "[]");
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-org-path-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -146,7 +151,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
     void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/self/applications", "[]");
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-self-path-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -164,7 +169,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
         stubFor(get(urlEqualTo("/organisations/orga_test/applications"))
             .willReturn(okJson("[]")));
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-trailing-slash-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -186,7 +191,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-fetch-one-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -213,7 +218,7 @@ class ListApplicationsTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListApplications.builder()
+        var task = TestableListApplications.builder()
             .id("list-apps-store-test")
             .type(ListApplications.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -235,6 +240,21 @@ class ListApplicationsTest extends AbstractClevercloudTest {
             assertThat(stored, hasSize(2));
             assertThat(stored.get(0).getId(), is("app_store-1"));
             assertThat(stored.get(1).getId(), is("app_store-2"));
+        }
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableListApplications extends ListApplications {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
         }
     }
 }

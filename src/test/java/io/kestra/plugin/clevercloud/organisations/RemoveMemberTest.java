@@ -3,6 +3,11 @@ package io.kestra.plugin.clevercloud.organisations;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -25,7 +30,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
         stubFor(delete(urlPathEqualTo("/organisations/orga_test/members/user_abc-001"))
             .willReturn(ok()));
 
-        var task = TestTasks.TestableRemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -44,7 +49,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
         stubFor(delete(urlPathEqualTo("/organisations/orga_test/members/user_abc-001"))
             .willReturn(ok()));
 
-        var task = TestTasks.TestableRemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-auth-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -64,7 +69,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
         stubFor(delete(urlPathEqualTo("/organisations/orga_test/members/user_def-002"))
             .willReturn(aResponse().withStatus(204)));
 
-        var task = TestTasks.TestableRemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-204-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -81,7 +86,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
         stubFor(delete(urlPathEqualTo("/organisations/orga_test/members/user_abc-001"))
             .willReturn(ok()));
 
-        var task = TestTasks.TestableRemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-trailing-slash-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -97,7 +102,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
 
     @Test
     void throwsClearExceptionWhenOrganisationIdMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestTasks.TestableRemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-missing-org-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -112,7 +117,7 @@ class RemoveMemberTest extends AbstractClevercloudTest {
 
     @Test
     void throwsClearExceptionWhenUserIdMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestTasks.TestableRemoveMember.builder()
+        var task = TestableRemoveMember.builder()
             .id("remove-member-missing-user-test")
             .type(RemoveMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -123,5 +128,20 @@ class RemoveMemberTest extends AbstractClevercloudTest {
         var runContext = runContext();
         var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("userId is required for RemoveMember"));
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableRemoveMember extends RemoveMember {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
+        }
     }
 }

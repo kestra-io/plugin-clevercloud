@@ -6,6 +6,11 @@ import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.organisations.model.Addon;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -49,7 +54,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -78,7 +83,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
     void handleEmptyAddonList(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_empty/addons", "[]");
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-empty-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -96,7 +101,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_test/addons", "[]");
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-auth-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -113,7 +118,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
     void usesOrganisationPathWhenOrgIdProvided(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/organisations/orga_abc123/addons", "[]");
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-org-path-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -130,7 +135,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
     void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubGetJson("/self/addons", "[]");
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-self-path-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -148,7 +153,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
         stubFor(get(urlEqualTo("/organisations/orga_test/addons"))
             .willReturn(okJson("[]")));
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-trailing-slash-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -170,7 +175,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-fetch-one-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -197,7 +202,7 @@ class ListAddonsTest extends AbstractClevercloudTest {
             ]
             """);
 
-        var task = TestTasks.TestableListAddons.builder()
+        var task = TestableListAddons.builder()
             .id("list-addons-store-test")
             .type(ListAddons.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -219,6 +224,21 @@ class ListAddonsTest extends AbstractClevercloudTest {
             assertThat(stored, hasSize(2));
             assertThat(stored.get(0).getId(), is("addon_store-1"));
             assertThat(stored.get(1).getId(), is("addon_store-2"));
+        }
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableListAddons extends ListAddons {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
         }
     }
 }

@@ -11,6 +11,11 @@ import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.core.runners.RunContextInitializer;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import jakarta.inject.Inject;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -43,7 +48,7 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
     }
 
     private MemberChangeTrigger buildTrigger(MemberChangeTrigger.MemberEvent event, String baseUrl) {
-        return TestTasks.TestableMemberChangeTrigger.builder()
+        return TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -275,7 +280,7 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
         triggerId = buildTriggerId();
         stubGetJson("/organisations/orga_test/members", MEMBER_A_JSON);
 
-        var trigger = TestTasks.TestableMemberChangeTrigger.builder()
+        var trigger = TestableMemberChangeTrigger.builder()
             .id(triggerId)
             .type(MemberChangeTrigger.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -346,5 +351,20 @@ class MemberChangeTriggerTest extends AbstractClevercloudTest {
         // If flow-b's poll had clobbered the shared KV entry, this would incorrectly detect user_bbb as removed.
         var resultA2 = triggerA.evaluate(condCtxA, trigCtxA);
         assertThat("flow-a must not fire on its own unchanged member set", resultA2.isEmpty(), is(true));
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableMemberChangeTrigger extends MemberChangeTrigger {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
+        }
     }
 }

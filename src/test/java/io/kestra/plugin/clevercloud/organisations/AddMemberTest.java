@@ -4,6 +4,11 @@ import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.organisations.model.OrgRole;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
@@ -32,7 +37,7 @@ class AddMemberTest extends AbstractClevercloudTest {
                 }
                 """)));
 
-        var task = TestTasks.TestableAddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -56,7 +61,7 @@ class AddMemberTest extends AbstractClevercloudTest {
         stubFor(post(urlPathEqualTo("/organisations/orga_test/members"))
             .willReturn(okJson("{}")));
 
-        var task = TestTasks.TestableAddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-ct-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -77,7 +82,7 @@ class AddMemberTest extends AbstractClevercloudTest {
         stubFor(post(urlPathEqualTo("/organisations/orga_test/members"))
             .willReturn(okJson("{}")));
 
-        var task = TestTasks.TestableAddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-role-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -95,7 +100,7 @@ class AddMemberTest extends AbstractClevercloudTest {
 
     @Test
     void throwsClearExceptionWhenOrganisationIdMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestTasks.TestableAddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-missing-org-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -111,7 +116,7 @@ class AddMemberTest extends AbstractClevercloudTest {
 
     @Test
     void throwsClearExceptionWhenEmailMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestTasks.TestableAddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-missing-email-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -127,7 +132,7 @@ class AddMemberTest extends AbstractClevercloudTest {
 
     @Test
     void throwsClearExceptionWhenRoleMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestTasks.TestableAddMember.builder()
+        var task = TestableAddMember.builder()
             .id("add-member-missing-role-test")
             .type(AddMember.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -139,5 +144,20 @@ class AddMemberTest extends AbstractClevercloudTest {
         var runContext = runContext();
         var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("role is required for AddMember"));
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableAddMember extends AddMember {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
+        }
     }
 }

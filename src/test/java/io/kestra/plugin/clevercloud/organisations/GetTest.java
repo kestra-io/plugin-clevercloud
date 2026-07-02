@@ -4,6 +4,11 @@ import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -38,7 +43,7 @@ class GetTest extends AbstractClevercloudTest {
             }
             """);
 
-        var task = TestTasks.TestableGet.builder()
+        var task = TestableGet.builder()
             .id("get-org-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -63,7 +68,7 @@ class GetTest extends AbstractClevercloudTest {
             {"id":"orga_abc123","name":"Acme Corp","cleverEnterprise":false}
             """);
 
-        var task = TestTasks.TestableGet.builder()
+        var task = TestableGet.builder()
             .id("get-auth-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("my-secret-token"))
@@ -82,7 +87,7 @@ class GetTest extends AbstractClevercloudTest {
             {"id":"orga_xyz789","name":"Test Org","cleverEnterprise":true}
             """);
 
-        var task = TestTasks.TestableGet.builder()
+        var task = TestableGet.builder()
             .id("get-org-path-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -101,7 +106,7 @@ class GetTest extends AbstractClevercloudTest {
             {"id":"user_personal123","name":"Personal Account","cleverEnterprise":false}
             """);
 
-        var task = TestTasks.TestableGet.builder()
+        var task = TestableGet.builder()
             .id("get-self-path-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -121,7 +126,7 @@ class GetTest extends AbstractClevercloudTest {
                 {"id":"orga_abc123","name":"Acme Corp","cleverEnterprise":false}
                 """)));
 
-        var task = TestTasks.TestableGet.builder()
+        var task = TestableGet.builder()
             .id("get-trailing-slash-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -141,7 +146,7 @@ class GetTest extends AbstractClevercloudTest {
                 .withHeader("Content-Type", "application/json")
                 .withBody("{\"id\":6017,\"message\":\"This organisation is not allowed to perform this operation.\",\"type\":\"error\"}")));
 
-        var task = TestTasks.TestableGet.builder()
+        var task = TestableGet.builder()
             .id("get-403-test")
             .type(Get.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
@@ -153,5 +158,20 @@ class GetTest extends AbstractClevercloudTest {
         var ex = assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("403"));
         assertThat(ex.getMessage(), not(containsString("is not allowed")));
+    }
+
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableGet extends Get {
+
+        private String testBaseUrl;
+
+        @Override
+        protected String baseUrl() {
+            return testBaseUrl;
+        }
     }
 }
