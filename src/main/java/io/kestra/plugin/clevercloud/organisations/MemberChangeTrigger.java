@@ -113,11 +113,11 @@ public class MemberChangeTrigger extends AbstractTrigger
 
     @Schema(
         title = "How often to check for membership changes",
-        description = "ISO-8601 duration. Defaults to PT1M."
+        description = "ISO-8601 duration. Defaults to PT5M."
     )
     @PluginProperty(group = "reliability")
     @Builder.Default
-    private Duration interval = Duration.ofMinutes(1);
+    private Duration interval = Duration.ofMinutes(5);
 
     @Override
     public Duration getInterval() {
