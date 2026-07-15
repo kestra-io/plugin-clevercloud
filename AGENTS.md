@@ -34,7 +34,7 @@ Infrastructure dependencies (Docker Compose services):
 ### Key Plugin Classes
 
 - `io.kestra.plugin.clevercloud.AbstractCleverCloudConnection` - shared Bearer-auth base class; owns `apiToken`, `baseUrl()`, URL joining, `buildGetRequest`/`buildPostRequest`/`buildPutRequest`/`buildDeleteRequest`, and error-safe HTTP call handling
-- `io.kestra.plugin.clevercloud.applications.List` - list applications, full `ApplicationView` shape, supports `fetchType` (overlaps `organisations.ListApplications`, same endpoint, richer output)
+- `io.kestra.plugin.clevercloud.applications.List` - list applications, full `ApplicationView` shape, supports `fetchType` (canonical listing task, aliases the removed `organisations.ListApplications`)
 - `io.kestra.plugin.clevercloud.applications.Get` - get a single application by ID (zone, instance type/version, state, deploy URL, scaling bounds)
 - `io.kestra.plugin.clevercloud.applications.GetEnv` - get all environment variables of an application as a map
 - `io.kestra.plugin.clevercloud.applications.SetEnv` - create or update environment variables, one `PUT .../env/{envName}` call per variable
@@ -52,7 +52,6 @@ Infrastructure dependencies (Docker Compose services):
 - `io.kestra.plugin.clevercloud.organisations.ListMembers` - list organisation members
 - `io.kestra.plugin.clevercloud.organisations.AddMember` - invite a user to the organisation
 - `io.kestra.plugin.clevercloud.organisations.RemoveMember` - remove a user from the organisation
-- `io.kestra.plugin.clevercloud.organisations.ListApplications` - list applications in the organisation
 - `io.kestra.plugin.clevercloud.organisations.ListAddons` - list add-ons in the organisation
 - `io.kestra.plugin.clevercloud.organisations.MemberChangeTrigger` - polling trigger that fires when member set changes
 
@@ -93,13 +92,11 @@ plugin-clevercloud/
 │       ├── model/
 │       │   ├── Organisation.java
 │       │   ├── Member.java
-│       │   ├── Application.java
 │       │   └── Addon.java
 │       ├── Get.java
 │       ├── ListMembers.java
 │       ├── AddMember.java
 │       ├── RemoveMember.java
-│       ├── ListApplications.java
 │       ├── ListAddons.java
 │       └── MemberChangeTrigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
@@ -125,7 +122,6 @@ plugin-clevercloud/
 │       ├── ListMembersTest.java
 │       ├── AddMemberTest.java
 │       ├── RemoveMemberTest.java
-│       ├── ListApplicationsTest.java
 │       ├── ListAddonsTest.java
 │       └── MemberChangeTriggerTest.java
 ├── src/main/resources/
@@ -143,13 +139,13 @@ plugin-clevercloud/
 
 - `apiToken` is the single credential for the whole plugin and must be marked `@PluginProperty(group = "connection", secret = true)`.
 - The default base URL is `https://api-bridge.clever-cloud.com/v2`. `baseUrl()` is overridable per class (used by tests to point at WireMock).
-- `organisationId` is optional on `Get`, `ListApplications`, and `ListAddons`: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`. It is required on `ListMembers`, `AddMember`, `RemoveMember`, and `MemberChangeTrigger` because `/self/members` does not exist on the Clever Cloud API.
+- `organisationId` is optional on `Get` and `ListAddons` (organisations package) and on `applications.List`: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`. It is required on `ListMembers`, `AddMember`, `RemoveMember`, and `MemberChangeTrigger` because `/self/members` does not exist on the Clever Cloud API.
 - Base the wording on the implemented packages and classes, not on template README text.
 - `Trigger` (deployments) and `MemberChangeTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
 - `MemberChangeTrigger` uses `runContext.namespaceKv()` to persist the member ID set between evaluations (no timestamps in the members response), keyed by flow id + trigger id + organisation id so triggers with the same id in different flows do not collide.
-- `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use ListApplications/ListAddons for personal accounts.
+- `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use `applications.List`/`ListAddons` for personal accounts.
 - All task/trigger tests extend `io.kestra.plugin.clevercloud.AbstractClevercloudTest` for shared `@KestraTest`/`@WireMockTest` wiring and WireMock helpers. Each test file declares its own nested `Testable*` subclass overriding `baseUrl()`.
-- `applications.List` overlaps `organisations.ListApplications` (identical endpoint, `GET .../applications`) but returns the full `ApplicationView` shape (state, deployUrl, instance scaling bounds) instead of the summary fields. Both are kept: `organisations.ListApplications` groups with other org-scoped listings (members, add-ons), `applications.List` groups with the rest of the application lifecycle tasks.
+- `applications.List` is the single canonical task for listing applications. `organisations.ListApplications` was removed and is now a deprecated alias resolving to `applications.List` via `@Plugin(aliases = "io.kestra.plugin.clevercloud.organisations.ListApplications")`, so existing flows referencing the old type keep working unchanged.
 - No `applications.RedeployTrigger` was added: `deployments.Trigger` already polls the deployment list and fires on state changes, which covers the same use case (react to a new deployment reaching a target state) without a second competing trigger.
 - The bulk `PUT .../applications/{appId}/env` endpoint's request body is untyped (`string`) in the Clever Cloud OpenAPI spec, so `SetEnv` uses the unambiguous per-variable endpoint `PUT .../env/{envName}` with body `{"value": ...}` instead, one HTTP call per variable.
 - `Scale` and `Create` share the `WannabeApplication` PUT/POST target (`.../applications` and `.../applications/{appId}`); `Scale` first `GET`s the current application, rebuilds the full `WannabeApplication` body from it, then overlays only the min/max instance and flavor fields the caller set, so a scale request can never clear name/zone/instance type/version if the API replaces rather than merges the body.

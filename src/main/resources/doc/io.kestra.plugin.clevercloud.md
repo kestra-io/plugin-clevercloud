@@ -40,10 +40,6 @@ Each deployment record also has an `action` field: `DEPLOY` for code pushes and 
 
 Tasks for managing applications: list, fetch, configure, scale, deploy, and delete.
 
-`io.kestra.plugin.clevercloud.applications.List` overlaps `organisations.ListApplications`
-(same endpoint) but returns the full `ApplicationView` shape (state, deployUrl, instance scaling
-bounds) instead of the summary fields.
-
 **`io.kestra.plugin.clevercloud.applications.List`**
 
 Lists all applications in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `applications` (FETCH), `application` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each application entry contains: `id`, `name`, `description`, `zone`, `zoneId`, `state`, `deployUrl`, `creationDate`, `instance` (with `type`, `version`, `variant`, `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`).
@@ -122,9 +118,7 @@ Invites a user to the organisation by email and assigns a role. Requires `organi
 
 Removes a user from the organisation. Requires `organisationId`, `userId`. Obtain the user ID from `ListMembers` output (`members[i].member.id`). Returns no output.
 
-**`io.kestra.plugin.clevercloud.organisations.ListApplications`**
-
-Lists all applications in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `applications` (FETCH), `application` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each application entry contains: `id`, `name`, `description`, `zone`, `zoneId`, `instance` (with `type`, `version`, `variant.slug`).
+`io.kestra.plugin.clevercloud.organisations.ListApplications` was removed and is now a deprecated alias of `applications.List`: existing flows using the old type keep working, new flows should use `applications.List` directly.
 
 **`io.kestra.plugin.clevercloud.organisations.ListAddons`**
 

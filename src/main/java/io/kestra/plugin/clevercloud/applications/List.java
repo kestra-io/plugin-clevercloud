@@ -63,7 +63,8 @@ import java.util.ArrayList;
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                 """
         )
-    }
+    },
+    aliases = "io.kestra.plugin.clevercloud.organisations.ListApplications"
 )
 public class List extends AbstractCleverCloudConnection implements RunnableTask<List.Output> {
 
