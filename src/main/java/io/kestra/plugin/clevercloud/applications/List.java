@@ -1,4 +1,4 @@
-package io.kestra.plugin.clevercloud.organisations;
+package io.kestra.plugin.clevercloud.applications;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.kestra.core.models.annotations.Example;
@@ -9,7 +9,7 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
-import io.kestra.plugin.clevercloud.organisations.model.Application;
+import io.kestra.plugin.clevercloud.applications.model.Application;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -20,7 +20,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -30,7 +29,8 @@ import java.util.List;
 @Schema(
     title = "List applications in a Clever Cloud organisation or personal account",
     description = """
-        Returns all applications in the given organisation or personal account.
+        Returns all applications in the given organisation or personal account, with their zone,
+        instance type, and state.
         When organisationId is omitted, lists applications under the personal account via /self.
         """
 )
@@ -45,7 +45,7 @@ import java.util.List;
 
                 tasks:
                   - id: list
-                    type: io.kestra.plugin.clevercloud.organisations.ListApplications
+                    type: io.kestra.plugin.clevercloud.applications.List
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 """
@@ -59,13 +59,14 @@ import java.util.List;
 
                 tasks:
                   - id: list
-                    type: io.kestra.plugin.clevercloud.organisations.ListApplications
+                    type: io.kestra.plugin.clevercloud.applications.List
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                 """
         )
-    }
+    },
+    aliases = "io.kestra.plugin.clevercloud.organisations.ListApplications"
 )
-public class ListApplications extends AbstractCleverCloudConnection implements RunnableTask<ListApplications.Output> {
+public class List extends AbstractCleverCloudConnection implements RunnableTask<List.Output> {
 
     @Schema(
         title = "Organisation ID",
@@ -112,7 +113,7 @@ public class ListApplications extends AbstractCleverCloudConnection implements R
             title = "List of applications in the organisation or personal account",
             description = "Populated when fetchType is FETCH."
         )
-        private final List<Application> applications;
+        private final java.util.List<Application> applications;
 
         @Schema(
             title = "First application returned by the API",

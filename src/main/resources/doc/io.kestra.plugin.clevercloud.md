@@ -1,6 +1,6 @@
 # How to use the Clever Cloud plugin
 
-This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/), a Platform-as-a-Service provider. It exposes tasks and triggers for managing application deployments and organisations via the [Clever Cloud API v2](https://api-bridge.clever-cloud.com/v2/).
+This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/), a Platform-as-a-Service provider. It exposes tasks and triggers for managing applications, application deployments, and organisations via the [Clever Cloud API v2](https://api-bridge.clever-cloud.com/v2/).
 
 ## Authentication
 
@@ -35,6 +35,50 @@ The Clever Cloud v2 API uses the following `state` values on deployment records:
 Each deployment record also has an `action` field: `DEPLOY` for code pushes and `UNDEPLOY` for infrastructure scale-down or moderation events.
 
 ## Tasks
+
+### applications
+
+Tasks for managing applications: list, fetch, configure, scale, deploy, and delete.
+
+**`io.kestra.plugin.clevercloud.applications.List`**
+
+Lists all applications in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `applications` (FETCH), `application` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each application entry contains: `id`, `name`, `description`, `zone`, `zoneId`, `state`, `deployUrl`, `creationDate`, `instance` (with `type`, `version`, `variant`, `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`).
+
+**`io.kestra.plugin.clevercloud.applications.Get`**
+
+Fetches a single application by ID. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `id`, `name`, `description`, `zone`, `state`, `deployUrl`, `instanceType`, `instanceVersion`, `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`.
+
+**`io.kestra.plugin.clevercloud.applications.GetEnv`**
+
+Fetches the application's environment variables. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `variables` (map of name to value), `total`. GetEnv returns variable values in plain text: avoid logging or persisting its output if any variable holds a credential.
+
+**`io.kestra.plugin.clevercloud.applications.SetEnv`**
+
+Creates or updates environment variables one at a time via `PUT .../env/{envName}`. This is not atomic: a failure partway through the list leaves the earlier variables already applied. Required: `applicationId`, `vars` (map of name to value, at least one entry). Optional: `organisationId` (defaults to /self when omitted). Outputs: `updatedCount`.
+
+**`io.kestra.plugin.clevercloud.applications.Create`**
+
+Creates a new application. Required: `name`. Optional: `organisationId` (defaults to /self when omitted), `applicationDescription`, `zone`, `instanceType`, `instanceVersion`, `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`. Outputs: `id`, `name`, `zone`, `deployUrl`, `instanceType`, `instanceVersion`.
+
+**`io.kestra.plugin.clevercloud.applications.Scale`**
+
+Updates instance count and flavor bounds via `PUT .../applications/{appId}`. Reads the current application first (`GET .../applications/{appId}`), then re-sends its full definition with only your scaling fields overlaid on top, so unset fields such as name or zone are never cleared. Required: `applicationId`, and at least one of `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`.
+
+**`io.kestra.plugin.clevercloud.applications.Redeploy`**
+
+Triggers a new deployment via `POST .../instances`. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted), `commit` (redeploys the last pushed commit when omitted), `useCache` (defaults to true on the API side). Returns no output; track the resulting deployment with `deployments.List`, `deployments.Get`, or `deployments.WaitForState`.
+
+**`io.kestra.plugin.clevercloud.applications.Restart`**
+
+Restarts the application's instances on the currently deployed commit. Calls the same endpoint as Redeploy but never sends a `commit` parameter. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted), `useCache`. Returns no output.
+
+**`io.kestra.plugin.clevercloud.applications.Stop`**
+
+Stops all running instances via `DELETE .../instances`, without deleting the application. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `message`.
+
+**`io.kestra.plugin.clevercloud.applications.Delete`**
+
+Permanently deletes the application via `DELETE .../applications/{appId}`. Does not delete linked add-ons. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `message`.
 
 ### deployments
 
@@ -74,9 +118,7 @@ Invites a user to the organisation by email and assigns a role. Requires `organi
 
 Removes a user from the organisation. Requires `organisationId`, `userId`. Obtain the user ID from `ListMembers` output (`members[i].member.id`). Returns no output.
 
-**`io.kestra.plugin.clevercloud.organisations.ListApplications`**
-
-Lists all applications in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `applications` (FETCH), `application` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each application entry contains: `id`, `name`, `description`, `zone`, `zoneId`, `instance` (with `type`, `version`, `variant.slug`).
+`io.kestra.plugin.clevercloud.organisations.ListApplications` was removed and is now a deprecated alias of `applications.List`: existing flows using the old type keep working, new flows should use `applications.List` directly.
 
 **`io.kestra.plugin.clevercloud.organisations.ListAddons`**
 
