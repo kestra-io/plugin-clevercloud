@@ -127,8 +127,7 @@ plugin-clevercloud/
 │       ├── RemoveMemberTest.java
 │       ├── ListApplicationsTest.java
 │       ├── ListAddonsTest.java
-│       ├── MemberChangeTriggerTest.java
-│       └── TestTasks.java
+│       └── MemberChangeTriggerTest.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
@@ -153,7 +152,8 @@ plugin-clevercloud/
 - `applications.List` overlaps `organisations.ListApplications` (identical endpoint, `GET .../applications`) but returns the full `ApplicationView` shape (state, deployUrl, instance scaling bounds) instead of the summary fields. Both are kept: `organisations.ListApplications` groups with other org-scoped listings (members, add-ons), `applications.List` groups with the rest of the application lifecycle tasks.
 - No `applications.RedeployTrigger` was added: `deployments.Trigger` already polls the deployment list and fires on state changes, which covers the same use case (react to a new deployment reaching a target state) without a second competing trigger.
 - The bulk `PUT .../applications/{appId}/env` endpoint's request body is untyped (`string`) in the Clever Cloud OpenAPI spec, so `SetEnv` uses the unambiguous per-variable endpoint `PUT .../env/{envName}` with body `{"value": ...}` instead, one HTTP call per variable.
-- `Scale` and `Create` share the `WannabeApplication` PUT/POST target (`.../applications` and `.../applications/{appId}`); `Scale` builds a partial body (only the min/max instance and flavor fields the caller set) since the Clever Cloud console's own scale action does the same, so unset fields are not overwritten.
+- `Scale` and `Create` share the `WannabeApplication` PUT/POST target (`.../applications` and `.../applications/{appId}`); `Scale` first `GET`s the current application, rebuilds the full `WannabeApplication` body from it, then overlays only the min/max instance and flavor fields the caller set, so a scale request can never clear name/zone/instance type/version if the API replaces rather than merges the body.
+- `Redeploy` and `Restart` share the query-string building for `.../applications/{appId}/instances` via `AbstractCleverCloudConnection.instancesUrl(baseUrl, organisationId, applicationId, queryParams)`.
 - `Redeploy` and `Restart` both call `POST .../applications/{appId}/instances`; the only difference is that `Restart` never sends a `commit` query param, so it always redeploys the currently deployed commit instead of a caller-specified one.
 - `buildPutRequest` was added to `AbstractCleverCloudConnection` alongside the existing `buildGetRequest`/`buildPostRequest`/`buildDeleteRequest` to support `SetEnv` and `Scale`.
 

@@ -1,6 +1,7 @@
 package io.kestra.plugin.clevercloud.applications;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import lombok.EqualsAndHashCode;
@@ -10,8 +11,10 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.put;
@@ -87,6 +90,35 @@ class SetEnvTest extends AbstractClevercloudTest {
         var runContext = runContext();
         var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("vars must contain at least one"));
+    }
+
+    @Test
+    void stopsOnFirstFailureLeavingEarlierVariablesApplied(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(put(urlPathEqualTo("/organisations/orga_test/applications/app_abc123/env/FIRST_VAR"))
+            .willReturn(okJson("{}")));
+        stubFor(put(urlPathEqualTo("/organisations/orga_test/applications/app_abc123/env/SECOND_VAR"))
+            .willReturn(aResponse().withStatus(500)));
+
+        var orderedVars = new LinkedHashMap<String, String>();
+        orderedVars.put("FIRST_VAR", "a");
+        orderedVars.put("SECOND_VAR", "b");
+
+        var task = TestableSetEnv.builder()
+            .id("set-env-partial-failure-test")
+            .type(SetEnv.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .applicationId(Property.ofValue("app_abc123"))
+            .vars(Property.ofValue(orderedVars))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var runContext = runContext();
+        assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
+
+        // FIRST_VAR was already applied before SECOND_VAR failed: the operation is non-atomic.
+        verify(putRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_abc123/env/FIRST_VAR")));
+        verify(putRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_abc123/env/SECOND_VAR")));
     }
 
     @Test

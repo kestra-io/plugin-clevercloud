@@ -18,6 +18,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
+import java.util.LinkedHashMap;
 
 @SuperBuilder
 @ToString
@@ -82,15 +83,17 @@ public class Restart extends AbstractCleverCloudConnection implements RunnableTa
             () -> new IllegalArgumentException("applicationId is required")
         );
 
-        var urlBuilder = new StringBuilder(resourceUrl(baseUrl(), rOrgId, "applications/" + encodeSegment(rAppId) + "/instances"));
-
         var rUseCache = runContext.render(useCache).as(Boolean.class).orElse(null);
+
+        var queryParams = new LinkedHashMap<String, String>();
         if (rUseCache != null) {
-            urlBuilder.append("?useCache=").append(rUseCache);
+            queryParams.put("useCache", String.valueOf(rUseCache));
         }
 
+        var url = instancesUrl(baseUrl(), rOrgId, rAppId, queryParams);
+
         logger.info("Restarting application {}", rAppId);
-        makeCall(runContext, HttpRequest.builder().uri(URI.create(urlBuilder.toString())).method("POST"));
+        makeCall(runContext, HttpRequest.builder().uri(URI.create(url)).method("POST"));
 
         return null;
     }

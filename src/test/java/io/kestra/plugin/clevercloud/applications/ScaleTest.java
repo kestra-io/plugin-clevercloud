@@ -11,6 +11,7 @@ import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.put;
 import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
@@ -24,8 +25,28 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ScaleTest extends AbstractClevercloudTest {
 
+    // Current definition returned by the GET fetched before the PUT, with fields the scale
+    // request does not touch (name, zone, instanceType/instanceVersion) so the merge can be
+    // asserted for real instead of trivially.
+    private static final String CURRENT_APPLICATION = """
+        {
+          "id": "app_abc123",
+          "name": "kestra",
+          "zone": "par",
+          "instance": {
+            "type": "node",
+            "version": "20260617",
+            "minInstances": 1,
+            "maxInstances": 1,
+            "minFlavor": {"name": "XS"},
+            "maxFlavor": {"name": "XS"}
+          }
+        }
+        """;
+
     @Test
-    void sendsOnlyProvidedFieldsInRequestBody(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+    void mergesScaleFieldsIntoCurrentApplicationDefinition(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubGetJson("/organisations/orga_test/applications/app_abc123", CURRENT_APPLICATION);
         stubFor(put(urlPathEqualTo("/organisations/orga_test/applications/app_abc123"))
             .willReturn(okJson("""
                 {
@@ -59,14 +80,25 @@ class ScaleTest extends AbstractClevercloudTest {
         assertThat(output.getMinFlavor(), is("S"));
         assertThat(output.getMaxFlavor(), is("M"));
 
+        verify(getRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_abc123")));
         verify(putRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_abc123"))
             .withRequestBody(equalToJson("""
-                {"minInstances": 2, "maxInstances": 4, "minFlavor": "S", "maxFlavor": "M"}
+                {
+                  "name": "kestra",
+                  "zone": "par",
+                  "instanceType": "node",
+                  "instanceVersion": "20260617",
+                  "minInstances": 2,
+                  "maxInstances": 4,
+                  "minFlavor": "S",
+                  "maxFlavor": "M"
+                }
                 """, true, true)));
     }
 
     @Test
-    void sendsOnlyMaxInstancesWhenOnlyThatIsSet(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+    void sendsOnlyMaxInstancesOverriddenOnTopOfPreservedFields(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubGetJson("/organisations/orga_test/applications/app_abc123", CURRENT_APPLICATION);
         stubFor(put(urlPathEqualTo("/organisations/orga_test/applications/app_abc123"))
             .willReturn(okJson("{\"id\": \"app_abc123\", \"instance\": {\"maxInstances\": 5}}")));
 
@@ -83,11 +115,23 @@ class ScaleTest extends AbstractClevercloudTest {
         task.run(runContext());
 
         verify(putRequestedFor(urlPathEqualTo("/organisations/orga_test/applications/app_abc123"))
-            .withRequestBody(equalToJson("{\"maxInstances\": 5}", true, true)));
+            .withRequestBody(equalToJson("""
+                {
+                  "name": "kestra",
+                  "zone": "par",
+                  "instanceType": "node",
+                  "instanceVersion": "20260617",
+                  "minInstances": 1,
+                  "maxInstances": 5,
+                  "minFlavor": "XS",
+                  "maxFlavor": "XS"
+                }
+                """, true, true)));
     }
 
     @Test
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubGetJson("/organisations/orga_test/applications/app_abc123", CURRENT_APPLICATION);
         stubFor(put(urlPathEqualTo("/organisations/orga_test/applications/app_abc123"))
             .willReturn(okJson("{}")));
 

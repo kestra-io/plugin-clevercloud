@@ -28,6 +28,9 @@ import java.util.Map;
     description = """
         Creates or updates the given environment variables on the application, one API call per
         variable. Existing variables not listed in vars keep their current value.
+        This is not atomic: if a call fails partway through, the variables processed before the
+        failure are already applied and the remaining ones are not, so vars is not fully applied
+        or fully rolled back.
         When organisationId is omitted, the personal account endpoint (/self) is used.
         """
 )
@@ -92,12 +95,22 @@ public class SetEnv extends AbstractCleverCloudConnection implements RunnableTas
         var envUrl = resourceUrl(baseUrl(), rOrgId, "applications/" + encodeSegment(rAppId) + "/env");
 
         logger.info("Setting {} environment variable(s) on application {}", rVars.size(), rAppId);
+        var appliedCount = 0;
         for (var entry : rVars.entrySet()) {
             var url = envUrl + "/" + encodeSegment(entry.getKey());
-            makeCall(runContext, buildPutRequest(url, Map.of("value", entry.getValue())));
+            try {
+                makeCall(runContext, buildPutRequest(url, Map.of("value", entry.getValue())));
+            } catch (Exception e) {
+                logger.error(
+                    "Failed to set environment variable '{}' on application {} after {} of {} variable(s) were applied",
+                    entry.getKey(), rAppId, appliedCount, rVars.size()
+                );
+                throw e;
+            }
+            appliedCount++;
         }
 
-        return Output.builder().updatedCount(rVars.size()).build();
+        return Output.builder().updatedCount(appliedCount).build();
     }
 
     @Builder

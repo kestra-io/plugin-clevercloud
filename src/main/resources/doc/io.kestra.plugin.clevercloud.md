@@ -54,11 +54,11 @@ Fetches a single application by ID. Required: `applicationId`. Optional: `organi
 
 **`io.kestra.plugin.clevercloud.applications.GetEnv`**
 
-Fetches the application's environment variables. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `variables` (map of name to value), `total`.
+Fetches the application's environment variables. Required: `applicationId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `variables` (map of name to value), `total`. GetEnv returns variable values in plain text: avoid logging or persisting its output if any variable holds a credential.
 
 **`io.kestra.plugin.clevercloud.applications.SetEnv`**
 
-Creates or updates environment variables one at a time via `PUT .../env/{envName}`. Required: `applicationId`, `vars` (map of name to value, at least one entry). Optional: `organisationId` (defaults to /self when omitted). Outputs: `updatedCount`.
+Creates or updates environment variables one at a time via `PUT .../env/{envName}`. This is not atomic: a failure partway through the list leaves the earlier variables already applied. Required: `applicationId`, `vars` (map of name to value, at least one entry). Optional: `organisationId` (defaults to /self when omitted). Outputs: `updatedCount`.
 
 **`io.kestra.plugin.clevercloud.applications.Create`**
 
@@ -66,7 +66,7 @@ Creates a new application. Required: `name`. Optional: `organisationId` (default
 
 **`io.kestra.plugin.clevercloud.applications.Scale`**
 
-Updates instance count and flavor bounds via `PUT .../applications/{appId}`. Only the fields you set are sent, so unset fields keep their current value. Required: `applicationId`, and at least one of `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`.
+Updates instance count and flavor bounds via `PUT .../applications/{appId}`. Reads the current application first (`GET .../applications/{appId}`), then re-sends its full definition with only your scaling fields overlaid on top, so unset fields such as name or zone are never cleared. Required: `applicationId`, and at least one of `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`.
 
 **`io.kestra.plugin.clevercloud.applications.Redeploy`**
 

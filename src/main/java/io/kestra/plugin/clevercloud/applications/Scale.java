@@ -27,8 +27,10 @@ import java.util.LinkedHashMap;
 @Schema(
     title = "Scale a Clever Cloud application",
     description = """
-        Updates the instance count and flavor bounds of an application. Only the fields you set
-        are sent to the API, so unset fields keep their current value.
+        Updates the instance count and flavor bounds of an application. Only the scaling fields
+        you set are changed: this task first reads the application's current definition and
+        re-sends it in full, with your scaling fields overlaid on top, so name, zone, and other
+        unset fields are never cleared.
         When organisationId is omitted, the personal account endpoint (/self) is used.
         """
 )
@@ -94,13 +96,13 @@ public class Scale extends AbstractCleverCloudConnection implements RunnableTask
             () -> new IllegalArgumentException("applicationId is required")
         );
 
-        var payload = new LinkedHashMap<String, Object>();
-        runContext.render(minInstances).as(Integer.class).ifPresent(v -> payload.put("minInstances", v));
-        runContext.render(maxInstances).as(Integer.class).ifPresent(v -> payload.put("maxInstances", v));
-        runContext.render(minFlavor).as(String.class).ifPresent(v -> payload.put("minFlavor", v));
-        runContext.render(maxFlavor).as(String.class).ifPresent(v -> payload.put("maxFlavor", v));
+        var scaleFields = new LinkedHashMap<String, Object>();
+        runContext.render(minInstances).as(Integer.class).ifPresent(v -> scaleFields.put("minInstances", v));
+        runContext.render(maxInstances).as(Integer.class).ifPresent(v -> scaleFields.put("maxInstances", v));
+        runContext.render(minFlavor).as(String.class).ifPresent(v -> scaleFields.put("minFlavor", v));
+        runContext.render(maxFlavor).as(String.class).ifPresent(v -> scaleFields.put("maxFlavor", v));
 
-        if (payload.isEmpty()) {
+        if (scaleFields.isEmpty()) {
             throw new IllegalArgumentException(
                 "At least one of minInstances, maxInstances, minFlavor, maxFlavor must be set to scale an application"
             );
@@ -108,7 +110,14 @@ public class Scale extends AbstractCleverCloudConnection implements RunnableTask
 
         var url = resourceUrl(baseUrl(), rOrgId, "applications/" + encodeSegment(rAppId));
 
-        logger.info("Scaling application {}: {}", rAppId, payload);
+        logger.info("Fetching current definition of application {} before scaling", rAppId);
+        var currentBody = makeCall(runContext, buildGetRequest(url));
+        var currentApp = MAPPER.readValue(currentBody, Application.class);
+
+        var payload = toWannabeApplication(currentApp);
+        payload.putAll(scaleFields);
+
+        logger.info("Scaling application {}: {}", rAppId, scaleFields);
         var body = makeCall(runContext, buildPutRequest(url, payload));
         var app = MAPPER.readValue(body, Application.class);
 
@@ -119,6 +128,45 @@ public class Scale extends AbstractCleverCloudConnection implements RunnableTask
             .minFlavor(instance != null && instance.getMinFlavor() != null ? instance.getMinFlavor().getName() : null)
             .maxFlavor(instance != null && instance.getMaxFlavor() != null ? instance.getMaxFlavor().getName() : null)
             .build();
+    }
+
+    /**
+     * Rebuilds the WannabeApplication PUT body from the currently deployed application so a
+     * scale request never clears fields it doesn't set (name, zone, instance type/version, ...).
+     */
+    private static LinkedHashMap<String, Object> toWannabeApplication(Application currentApp) {
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("name", currentApp.getName());
+        if (currentApp.getDescription() != null) {
+            payload.put("description", currentApp.getDescription());
+        }
+        if (currentApp.getZone() != null) {
+            payload.put("zone", currentApp.getZone());
+        }
+
+        var instance = currentApp.getInstance();
+        if (instance != null) {
+            if (instance.getType() != null) {
+                payload.put("instanceType", instance.getType());
+            }
+            if (instance.getVersion() != null) {
+                payload.put("instanceVersion", instance.getVersion());
+            }
+            if (instance.getMinInstances() != null) {
+                payload.put("minInstances", instance.getMinInstances());
+            }
+            if (instance.getMaxInstances() != null) {
+                payload.put("maxInstances", instance.getMaxInstances());
+            }
+            if (instance.getMinFlavor() != null) {
+                payload.put("minFlavor", instance.getMinFlavor().getName());
+            }
+            if (instance.getMaxFlavor() != null) {
+                payload.put("maxFlavor", instance.getMaxFlavor().getName());
+            }
+        }
+
+        return payload;
     }
 
     @Builder

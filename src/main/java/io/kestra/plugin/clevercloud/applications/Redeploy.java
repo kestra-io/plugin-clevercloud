@@ -18,6 +18,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
+import java.util.LinkedHashMap;
 
 @SuperBuilder
 @ToString
@@ -105,22 +106,21 @@ public class Redeploy extends AbstractCleverCloudConnection implements RunnableT
             () -> new IllegalArgumentException("applicationId is required")
         );
 
-        var urlBuilder = new StringBuilder(resourceUrl(baseUrl(), rOrgId, "applications/" + encodeSegment(rAppId) + "/instances"));
-        var separator = "?";
-
         var rCommit = runContext.render(commit).as(String.class).orElse(null);
+        var rUseCache = runContext.render(useCache).as(Boolean.class).orElse(null);
+
+        var queryParams = new LinkedHashMap<String, String>();
         if (rCommit != null) {
-            urlBuilder.append(separator).append("commit=").append(encodeSegment(rCommit));
-            separator = "&";
+            queryParams.put("commit", rCommit);
+        }
+        if (rUseCache != null) {
+            queryParams.put("useCache", String.valueOf(rUseCache));
         }
 
-        var rUseCache = runContext.render(useCache).as(Boolean.class).orElse(null);
-        if (rUseCache != null) {
-            urlBuilder.append(separator).append("useCache=").append(rUseCache);
-        }
+        var url = instancesUrl(baseUrl(), rOrgId, rAppId, queryParams);
 
         logger.info("Redeploying application {}{}", rAppId, rCommit != null ? " at commit " + rCommit : "");
-        makeCall(runContext, HttpRequest.builder().uri(URI.create(urlBuilder.toString())).method("POST"));
+        makeCall(runContext, HttpRequest.builder().uri(URI.create(url)).method("POST"));
 
         return null;
     }

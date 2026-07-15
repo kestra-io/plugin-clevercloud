@@ -27,6 +27,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Map;
 
 @SuperBuilder
 @ToString
@@ -93,6 +94,20 @@ public abstract class AbstractCleverCloudConnection extends Task {
      */
     public static String membersUrl(String baseUrl, String organisationId) {
         return join(baseUrl, ORGANISATIONS_SEGMENT + "/" + encodeSegment(organisationId) + "/" + MEMBERS_SEGMENT);
+    }
+
+    /**
+     * Builds the .../applications/{appId}/instances URL shared by Redeploy and Restart, with optional
+     * query parameters appended in insertion order (e.g. commit, useCache).
+     */
+    public static String instancesUrl(String baseUrl, String organisationId, String applicationId, Map<String, String> queryParams) {
+        var url = new StringBuilder(resourceUrl(baseUrl, organisationId, "applications/" + encodeSegment(applicationId) + "/instances"));
+        var separator = "?";
+        for (var entry : queryParams.entrySet()) {
+            url.append(separator).append(entry.getKey()).append("=").append(encodeSegment(entry.getValue()));
+            separator = "&";
+        }
+        return url.toString();
     }
 
     public String makeCall(RunContext runContext, HttpRequest.HttpRequestBuilder requestBuilder) throws Exception {
