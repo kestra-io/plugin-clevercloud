@@ -163,6 +163,14 @@ public abstract class AbstractCleverCloudConnection extends Task {
             .body(HttpRequest.StringRequestBody.builder().content(jsonBody).build());
     }
 
+    protected HttpRequest.HttpRequestBuilder buildPutRequest(String url, Object body) throws Exception {
+        var jsonBody = MAPPER.writeValueAsString(body);
+        return HttpRequest.builder()
+            .uri(URI.create(url))
+            .method("PUT")
+            .body(HttpRequest.StringRequestBody.builder().content(jsonBody).build());
+    }
+
     protected HttpRequest.HttpRequestBuilder buildDeleteRequest(String url) {
         return HttpRequest.builder()
             .uri(URI.create(url))

@@ -23,6 +23,7 @@ sent as an `Authorization: Bearer` header.
 Source packages under `io.kestra.plugin`:
 
 - `clevercloud` (root: shared Bearer-auth base class)
+- `clevercloud.applications` (application lifecycle tasks: list, get, env, create, scale, redeploy, restart, stop, delete)
 - `clevercloud.deployments` (deployment tasks and trigger)
 - `clevercloud.organisations` (organisation and member management tasks and trigger)
 
@@ -32,7 +33,17 @@ Infrastructure dependencies (Docker Compose services):
 
 ### Key Plugin Classes
 
-- `io.kestra.plugin.clevercloud.AbstractCleverCloudConnection` - shared Bearer-auth base class; owns `apiToken`, `baseUrl()`, URL joining, and error-safe HTTP call handling
+- `io.kestra.plugin.clevercloud.AbstractCleverCloudConnection` - shared Bearer-auth base class; owns `apiToken`, `baseUrl()`, URL joining, `buildGetRequest`/`buildPostRequest`/`buildPutRequest`/`buildDeleteRequest`, and error-safe HTTP call handling
+- `io.kestra.plugin.clevercloud.applications.List` - list applications, full `ApplicationView` shape, supports `fetchType` (overlaps `organisations.ListApplications`, same endpoint, richer output)
+- `io.kestra.plugin.clevercloud.applications.Get` - get a single application by ID (zone, instance type/version, state, deploy URL, scaling bounds)
+- `io.kestra.plugin.clevercloud.applications.GetEnv` - get all environment variables of an application as a map
+- `io.kestra.plugin.clevercloud.applications.SetEnv` - create or update environment variables, one `PUT .../env/{envName}` call per variable
+- `io.kestra.plugin.clevercloud.applications.Create` - create an application (name required; zone, instance type/version, min/max instances, min/max flavor optional)
+- `io.kestra.plugin.clevercloud.applications.Scale` - update instance count/flavor bounds via a partial `PUT .../applications/{appId}`, only set fields are sent
+- `io.kestra.plugin.clevercloud.applications.Redeploy` - trigger a new deployment via `POST .../instances`, optional `commit` and `useCache`
+- `io.kestra.plugin.clevercloud.applications.Restart` - same endpoint as Redeploy but never sends `commit`, restarts the currently deployed commit
+- `io.kestra.plugin.clevercloud.applications.Stop` - stop running instances via `DELETE .../instances` without deleting the application
+- `io.kestra.plugin.clevercloud.applications.Delete` - delete an application via `DELETE .../applications/{appId}`
 - `io.kestra.plugin.clevercloud.deployments.List` - list deployments for an application, supports `fetchType` (FETCH, FETCH_ONE, STORE, NONE)
 - `io.kestra.plugin.clevercloud.deployments.Get` - get a single deployment by ID
 - `io.kestra.plugin.clevercloud.deployments.WaitForState` - poll until a deployment reaches a target state, with `failOnUnreached` to control whether an unreached target throws or just returns the last observed state
@@ -52,6 +63,22 @@ plugin-clevercloud/
 ├── src/main/java/io/kestra/plugin/clevercloud/
 │   ├── AbstractCleverCloudConnection.java
 │   ├── package-info.java
+│   ├── applications/
+│   │   ├── package-info.java
+│   │   ├── model/
+│   │   │   ├── Application.java
+│   │   │   ├── EnvironmentVariable.java
+│   │   │   └── Message.java
+│   │   ├── List.java
+│   │   ├── Get.java
+│   │   ├── GetEnv.java
+│   │   ├── SetEnv.java
+│   │   ├── Create.java
+│   │   ├── Scale.java
+│   │   ├── Redeploy.java
+│   │   ├── Restart.java
+│   │   ├── Stop.java
+│   │   └── Delete.java
 │   ├── deployments/
 │   │   ├── package-info.java
 │   │   ├── model/
@@ -77,6 +104,17 @@ plugin-clevercloud/
 │       └── MemberChangeTrigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
 │   ├── AbstractClevercloudTest.java
+│   ├── applications/
+│   │   ├── ListTest.java
+│   │   ├── GetTest.java
+│   │   ├── GetEnvTest.java
+│   │   ├── SetEnvTest.java
+│   │   ├── CreateTest.java
+│   │   ├── ScaleTest.java
+│   │   ├── RedeployTest.java
+│   │   ├── RestartTest.java
+│   │   ├── StopTest.java
+│   │   └── DeleteTest.java
 │   ├── deployments/
 │   │   ├── ListTest.java
 │   │   ├── GetTest.java
@@ -95,6 +133,7 @@ plugin-clevercloud/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
 │       ├── index.yaml
+│       ├── applications.yaml
 │       ├── deployments.yaml
 │       └── organisations.yaml
 ├── build.gradle
@@ -110,7 +149,13 @@ plugin-clevercloud/
 - `Trigger` (deployments) and `MemberChangeTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
 - `MemberChangeTrigger` uses `runContext.namespaceKv()` to persist the member ID set between evaluations (no timestamps in the members response), keyed by flow id + trigger id + organisation id so triggers with the same id in different flows do not collide.
 - `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use ListApplications/ListAddons for personal accounts.
-- Organisation task/trigger tests extend `io.kestra.plugin.clevercloud.AbstractClevercloudTest` for shared `@KestraTest`/`@WireMockTest` wiring and WireMock helpers, and use the `TestTasks` nested Testable subclasses (`organisations/TestTasks.java`) instead of one file per task.
+- All task/trigger tests extend `io.kestra.plugin.clevercloud.AbstractClevercloudTest` for shared `@KestraTest`/`@WireMockTest` wiring and WireMock helpers. Each test file declares its own nested `Testable*` subclass overriding `baseUrl()`.
+- `applications.List` overlaps `organisations.ListApplications` (identical endpoint, `GET .../applications`) but returns the full `ApplicationView` shape (state, deployUrl, instance scaling bounds) instead of the summary fields. Both are kept: `organisations.ListApplications` groups with other org-scoped listings (members, add-ons), `applications.List` groups with the rest of the application lifecycle tasks.
+- No `applications.RedeployTrigger` was added: `deployments.Trigger` already polls the deployment list and fires on state changes, which covers the same use case (react to a new deployment reaching a target state) without a second competing trigger.
+- The bulk `PUT .../applications/{appId}/env` endpoint's request body is untyped (`string`) in the Clever Cloud OpenAPI spec, so `SetEnv` uses the unambiguous per-variable endpoint `PUT .../env/{envName}` with body `{"value": ...}` instead, one HTTP call per variable.
+- `Scale` and `Create` share the `WannabeApplication` PUT/POST target (`.../applications` and `.../applications/{appId}`); `Scale` builds a partial body (only the min/max instance and flavor fields the caller set) since the Clever Cloud console's own scale action does the same, so unset fields are not overwritten.
+- `Redeploy` and `Restart` both call `POST .../applications/{appId}/instances`; the only difference is that `Restart` never sends a `commit` query param, so it always redeploys the currently deployed commit instead of a caller-specified one.
+- `buildPutRequest` was added to `AbstractCleverCloudConnection` alongside the existing `buildGetRequest`/`buildPostRequest`/`buildDeleteRequest` to support `SetEnv` and `Scale`.
 
 ## References
 

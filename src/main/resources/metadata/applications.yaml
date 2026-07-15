@@ -1,0 +1,8 @@
+group: io.kestra.plugin.clevercloud.applications
+name: "applications"
+title: "Applications"
+description: "Tasks for managing Clever Cloud applications: create, configure, scale, deploy, and delete."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
