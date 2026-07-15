@@ -2,7 +2,7 @@ group: io.kestra.plugin.clevercloud.applications
 name: "applications"
 title: "Applications"
 description: "Tasks for managing Clever Cloud applications: create, configure, scale, deploy, and delete."
-body: ""
+body: "Manage the lifecycle of Clever Cloud applications from Kestra: list, inspect, create, set environment variables, scale, redeploy, restart, stop, and delete. Authenticates with a single API token, and targets the personal account via /self when organisationId is omitted."
 videos: []
 createdBy: "Kestra Core Team"
 managedBy: "Kestra Core Team"
