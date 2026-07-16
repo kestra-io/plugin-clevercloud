@@ -1,6 +1,6 @@
 group: io.kestra.plugin.clevercloud.organisations
 name: "organisations"
-title: "Organisations"
+title: "Clever Cloud Organisations"
 description: "Tasks and triggers for managing Clever Cloud organisations and their members."
 body: ""
 videos: []

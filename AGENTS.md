@@ -1,4 +1,4 @@
-# Kestra Clevercloud Plugin
+# Kestra Clever Cloud Plugin
 
 ## What
 

@@ -35,7 +35,7 @@
 </p>
 <p align="center" style="color:grey;"><i>Get started with Kestra in 3 minutes.</i></p>
 
-# Kestra Clevercloud Plugin
+# Kestra Clever Cloud Plugin
 
 ## Why
 

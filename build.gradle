@@ -31,7 +31,7 @@ java {
 }
 
 group = "io.kestra.plugin"
-description = 'Clevercloud plugin for Kestra'
+description = 'Clever Cloud plugin for Kestra'
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
@@ -178,7 +178,7 @@ jar {
     manifest {
         attributes(
             "X-Kestra-Name": project.name,
-            "X-Kestra-Title": "Clevercloud",
+            "X-Kestra-Title": "Clever Cloud",
             "X-Kestra-Group": project.group + ".clevercloud",
             "X-Kestra-Description": project.description,
             "X-Kestra-Version": project.version
