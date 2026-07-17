@@ -65,7 +65,8 @@ class CreateTest extends AbstractClevercloudTest {
             .withRequestBody(containing("\"zone\":\"par\""))
             .withRequestBody(containing("\"instanceType\":\"node\""))
             .withRequestBody(containing("\"minInstances\":1"))
-            .withRequestBody(containing("\"maxFlavor\":\"S\"")));
+            .withRequestBody(containing("\"maxFlavor\":\"S\""))
+            .withRequestBody(containing("\"deploy\":\"git\"")));
     }
 
     @Test
@@ -85,7 +86,30 @@ class CreateTest extends AbstractClevercloudTest {
 
         assertThat(output.getId(), is("app_new-0002"));
         verify(postRequestedFor(urlPathEqualTo("/self/applications"))
-            .withRequestBody(containing("\"name\":\"minimal-app\"")));
+            .withRequestBody(containing("\"name\":\"minimal-app\""))
+            .withRequestBody(containing("\"deploy\":\"git\"")));
+    }
+
+    @Test
+    void createsApplicationWithFtpDeployMethod(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(post(urlPathEqualTo("/self/applications"))
+            .willReturn(okJson("{\"id\": \"app_new-0003\", \"name\": \"ftp-app\"}")));
+
+        var task = TestableCreate.builder()
+            .id("create-app-ftp-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .name(Property.ofValue("ftp-app"))
+            .deploy(Property.ofValue("ftp"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var output = task.run(runContext());
+
+        assertThat(output.getId(), is("app_new-0003"));
+        verify(postRequestedFor(urlPathEqualTo("/self/applications"))
+            .withRequestBody(containing("\"name\":\"ftp-app\""))
+            .withRequestBody(containing("\"deploy\":\"ftp\"")));
     }
 
     @Test

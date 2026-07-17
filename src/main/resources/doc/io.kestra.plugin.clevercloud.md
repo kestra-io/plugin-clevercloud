@@ -58,7 +58,7 @@ Creates or updates environment variables one at a time via `PUT .../env/{envName
 
 **`io.kestra.plugin.clevercloud.applications.Create`**
 
-Creates a new application. Required: `name`. Optional: `organisationId` (defaults to /self when omitted), `applicationDescription`, `zone`, `instanceType`, `instanceVersion`, `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`. Outputs: `id`, `name`, `zone`, `deployUrl`, `instanceType`, `instanceVersion`.
+Creates a new application. Required: `name`. Optional: `organisationId` (defaults to /self when omitted), `applicationDescription`, `zone`, `instanceType`, `instanceVersion`, `minInstances`, `maxInstances`, `minFlavor`, `maxFlavor`, `deploy` (deployment method, "git" or "ftp", defaults to "git", required by the Clever Cloud API on creation and always sent). Outputs: `id`, `name`, `zone`, `deployUrl`, `instanceType`, `instanceVersion`.
 
 **`io.kestra.plugin.clevercloud.applications.Scale`**
 

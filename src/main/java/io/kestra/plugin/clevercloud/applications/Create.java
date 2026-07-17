@@ -105,6 +105,14 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
     @PluginProperty(group = "execution")
     private Property<String> maxFlavor;
 
+    @Schema(
+        title = "Deployment method",
+        description = "\"git\" (default) or \"ftp\". Clever Cloud requires this field on application creation."
+    )
+    @PluginProperty(group = "main")
+    @Builder.Default
+    private Property<String> deploy = Property.ofValue("git");
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
@@ -116,6 +124,7 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
 
         var payload = new LinkedHashMap<String, Object>();
         payload.put("name", rName);
+        payload.put("deploy", runContext.render(deploy).as(String.class).orElse("git"));
         runContext.render(applicationDescription).as(String.class).ifPresent(v -> payload.put("description", v));
         runContext.render(zone).as(String.class).ifPresent(v -> payload.put("zone", v));
         runContext.render(instanceType).as(String.class).ifPresent(v -> payload.put("instanceType", v));
