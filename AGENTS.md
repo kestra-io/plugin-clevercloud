@@ -38,7 +38,7 @@ Infrastructure dependencies (Docker Compose services):
 - `io.kestra.plugin.clevercloud.applications.Get` - get a single application by ID (zone, instance type/version, state, deploy URL, scaling bounds)
 - `io.kestra.plugin.clevercloud.applications.GetEnv` - get all environment variables of an application as a map
 - `io.kestra.plugin.clevercloud.applications.SetEnv` - create or update environment variables, one `PUT .../env/{envName}` call per variable
-- `io.kestra.plugin.clevercloud.applications.Create` - create an application (name required; zone, instance type/version, min/max instances, min/max flavor optional)
+- `io.kestra.plugin.clevercloud.applications.Create` - create an application (name, instance type, instance version required; zone, min/max instances, min/max flavor optional)
 - `io.kestra.plugin.clevercloud.applications.Scale` - update instance count/flavor bounds via a partial `PUT .../applications/{appId}`, only set fields are sent
 - `io.kestra.plugin.clevercloud.applications.Redeploy` - trigger a new deployment via `POST .../instances`, optional `commit` and `useCache`
 - `io.kestra.plugin.clevercloud.applications.Restart` - same endpoint as Redeploy but never sends `commit`, restarts the currently deployed commit

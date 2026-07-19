@@ -79,6 +79,8 @@ class CreateTest extends AbstractClevercloudTest {
             .type(Create.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .name(Property.ofValue("minimal-app"))
+            .instanceType(Property.ofValue("node"))
+            .instanceVersion(Property.ofValue("20260617"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
@@ -100,6 +102,8 @@ class CreateTest extends AbstractClevercloudTest {
             .type(Create.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .name(Property.ofValue("ftp-app"))
+            .instanceType(Property.ofValue("node"))
+            .instanceVersion(Property.ofValue("20260617"))
             .deploy(Property.ofValue("ftp"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
@@ -123,6 +127,8 @@ class CreateTest extends AbstractClevercloudTest {
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_test"))
             .name(Property.ofValue("my-app"))
+            .instanceType(Property.ofValue("node"))
+            .instanceVersion(Property.ofValue("20260617"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
@@ -144,6 +150,23 @@ class CreateTest extends AbstractClevercloudTest {
         var runContext = runContext();
         var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("name is required"));
+    }
+
+    @Test
+    void throwsClearExceptionWhenInstanceVersionMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        var task = TestableCreate.builder()
+            .id("create-app-missing-instance-version-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .name(Property.ofValue("my-app"))
+            .instanceType(Property.ofValue("node"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var runContext = runContext();
+        var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("instanceVersion is required"));
     }
 
     @SuperBuilder
