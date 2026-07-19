@@ -1,6 +1,6 @@
 # How to use the Clever Cloud plugin
 
-This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/), a Platform-as-a-Service provider. It exposes tasks and triggers for managing applications, application deployments, and organisations via the [Clever Cloud API v2](https://api-bridge.clever-cloud.com/v2/).
+This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/), a Platform-as-a-Service provider. It exposes tasks and triggers for managing applications, application deployments, organisations, and application logs via the [Clever Cloud API v2](https://api-bridge.clever-cloud.com/v2/) and [APIv4](https://api-bridge.clever-cloud.com/v4/).
 
 ## Authentication
 
@@ -22,6 +22,8 @@ Most tasks accept an optional `organisationId`. When omitted, the plugin targets
 - Without `organisationId`: calls `self/applications/{appId}/deployments`
 
 Tasks that require an organisation (ListMembers, AddMember, RemoveMember) will throw a clear error when `organisationId` is omitted, because the `/self/members` endpoint does not exist on the Clever Cloud API.
+
+The `logs` tasks and trigger are the one exception: they always require `organisationId`, even for personal accounts (pass your personal account's `user_xxx` id). The Clever Cloud APIv4 logs and log drain endpoints have no `/self` shortcut at all.
 
 ## Deployment states
 
@@ -124,6 +126,32 @@ Removes a user from the organisation. Requires `organisationId`, `userId`. Obtai
 
 Lists all add-ons provisioned in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `addons` (FETCH), `addon` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each add-on entry contains: `id`, `name`, `realId`, `region`, `provider` (with `id`, `name`, `shortDesc`), `plan` (with `id`, `slug`, `name`).
 
+### logs
+
+Tasks for fetching, streaming, and forwarding application runtime logs, backed by the Clever Cloud APIv4 (not v2 like the rest of this plugin). `organisationId` and `applicationId` are always required: the v4 logs and log drain endpoints have no `/self` fallback.
+
+Both `Fetch` and `Stream` consume the same underlying endpoint, `GET /v4/logs/organisations/{organisationId}/applications/{applicationId}/logs`, which is Server-Sent Events (SSE) based even for a bounded historical fetch: the connection closes on its own once the requested `until` timestamp is reached, which is what makes both tasks terminate deterministically.
+
+**`io.kestra.plugin.clevercloud.logs.Fetch`**
+
+Fetches application runtime logs produced within a bounded time window. Required: `applicationId`, `organisationId`, `since`. Optional: `until` (defaults to now), `limit` (1-10000, defaults to 100), `filter` (server-side text filter), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `logs` (FETCH), `log` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each log entry contains: `id`, `applicationId`, `commitId`, `deploymentId`, `instanceId`, `date`, `zone`, `pid`, `facility`, `severity`, `priority`, `version`, `service`, `message`.
+
+**`io.kestra.plugin.clevercloud.logs.Stream`**
+
+Consumes live logs for a bounded `duration` (defaults to PT1M, capped at PT15M) instead of a fixed historical window, since a Kestra task must terminate deterministically rather than tail forever. Required: `applicationId`, `organisationId`. Optional: `duration`, `limit` (1-10000, defaults to 500), `filter`. Outputs: `logs`, `total`.
+
+**`io.kestra.plugin.clevercloud.logs.ListDrains`**
+
+Lists the log drains forwarding an application's logs to an external platform. Required: `applicationId`, `organisationId`. Optional: `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `drains` (FETCH), `drain` (FETCH_ONE), or `uri` (STORE). Each drain entry contains: `id`, `applicationId`, `recipient` (with `type`, `url`), `kind`, `updatedAt`, `status`, `updatedBy`, `execution` (with `status`, `lastError`), `backlog` (with `msgRateOut`, `msgBacklog`).
+
+**`io.kestra.plugin.clevercloud.logs.CreateDrain`**
+
+Creates a log drain. Required: `applicationId`, `organisationId`, `drainType` (enum: RAW_HTTP, SYSLOG_TCP, SYSLOG_UDP, DATADOG, ELASTICSEARCH, NEWRELIC), `url`. Optional: `kind` (enum: LOG, ACCESSLOG, AUDITLOG, defaults to LOG), `username`/`password` (RAW_HTTP or ELASTICSEARCH), `indexPrefix` (ELASTICSEARCH), `apiKey` (NEWRELIC), `structuredDataParameters` (SYSLOG_TCP or SYSLOG_UDP). There is no dedicated OVHCLOUD drain type on the Clever Cloud API: forward to OVHcloud via `RAW_HTTP` or `SYSLOG_TCP`/`SYSLOG_UDP` instead. Returns as soon as the drain is created, without waiting for it to reach `ENABLED`. Outputs: `id`, `kind`, `status`.
+
+**`io.kestra.plugin.clevercloud.logs.DeleteDrain`**
+
+Deletes a log drain by ID. Required: `applicationId`, `organisationId`, `drainId`. Returns no output.
+
 ## Triggers
 
 **`io.kestra.plugin.clevercloud.deployments.Trigger`**
@@ -135,3 +163,7 @@ The minimum recommended `interval` is PT30S to avoid rate-limiting the Clever Cl
 **`io.kestra.plugin.clevercloud.organisations.MemberChangeTrigger`**
 
 Polls the member list of an organisation at each `interval` and fires when the member set changes. Uses KV store to persist the member ID set between evaluations (the members endpoint has no timestamps). The first evaluation always establishes a baseline and never fires. Subsequent polls fire only when a change is detected. Requires `organisationId`, `event` (MEMBER_ADDED, MEMBER_REMOVED, or MEMBER_CHANGED). Outputs via `{{ trigger.* }}`: `organisationId`, `addedMembers` (list of user IDs), `removedMembers` (list of user IDs).
+
+**`io.kestra.plugin.clevercloud.logs.LogPatternTrigger`**
+
+Polls application runtime logs at each `interval` and fires when a log line produced since the previous evaluation matches `pattern` (a regex). If several new lines match in the same poll, only the most recent fires the trigger. Requires `organisationId`, `applicationId`, `pattern`. Optional: `limit` (1-10000, defaults to 200). Outputs via `{{ trigger.* }}`: `matchedLine`, `matchedAt`, `severity`, `service`.

@@ -26,6 +26,7 @@ Source packages under `io.kestra.plugin`:
 - `clevercloud.applications` (application lifecycle tasks: list, get, env, create, scale, redeploy, restart, stop, delete)
 - `clevercloud.deployments` (deployment tasks and trigger)
 - `clevercloud.organisations` (organisation and member management tasks and trigger)
+- `clevercloud.logs` (application log fetch/stream, log drain management, and log pattern trigger, backed by APIv4)
 
 Infrastructure dependencies (Docker Compose services):
 
@@ -54,6 +55,13 @@ Infrastructure dependencies (Docker Compose services):
 - `io.kestra.plugin.clevercloud.organisations.RemoveMember` - remove a user from the organisation
 - `io.kestra.plugin.clevercloud.organisations.ListAddons` - list add-ons in the organisation
 - `io.kestra.plugin.clevercloud.organisations.MemberChangeTrigger` - polling trigger that fires when member set changes
+- `io.kestra.plugin.clevercloud.logs.AbstractLogsConnection` - shared base for the logs package; owns `organisationId`/`applicationId` (both required, no `/self` fallback), v4 base URL, and the SSE-based `fetchLogs` helper
+- `io.kestra.plugin.clevercloud.logs.Fetch` - fetch application runtime logs in a bounded time window via the v4 logs SSE endpoint, supports `fetchType`
+- `io.kestra.plugin.clevercloud.logs.Stream` - consume live application logs for a bounded duration (defaults to PT1M, capped at PT15M) via the same v4 logs SSE endpoint
+- `io.kestra.plugin.clevercloud.logs.ListDrains` - list log drains configured for an application, supports `fetchType`
+- `io.kestra.plugin.clevercloud.logs.CreateDrain` - create a log drain (RAW_HTTP, SYSLOG_TCP, SYSLOG_UDP, DATADOG, ELASTICSEARCH, NEWRELIC)
+- `io.kestra.plugin.clevercloud.logs.DeleteDrain` - delete a log drain by ID
+- `io.kestra.plugin.clevercloud.logs.LogPatternTrigger` - polling trigger that fires when a log line matches a regex pattern
 
 ### Project Structure
 
@@ -87,18 +95,32 @@ plugin-clevercloud/
 │   │   ├── Get.java
 │   │   ├── WaitForState.java
 │   │   └── Trigger.java
-│   └── organisations/
+│   ├── organisations/
+│   │   ├── package-info.java
+│   │   ├── model/
+│   │   │   ├── Organisation.java
+│   │   │   ├── Member.java
+│   │   │   └── Addon.java
+│   │   ├── Get.java
+│   │   ├── ListMembers.java
+│   │   ├── AddMember.java
+│   │   ├── RemoveMember.java
+│   │   ├── ListAddons.java
+│   │   └── MemberChangeTrigger.java
+│   └── logs/
 │       ├── package-info.java
 │       ├── model/
-│       │   ├── Organisation.java
-│       │   ├── Member.java
-│       │   └── Addon.java
-│       ├── Get.java
-│       ├── ListMembers.java
-│       ├── AddMember.java
-│       ├── RemoveMember.java
-│       ├── ListAddons.java
-│       └── MemberChangeTrigger.java
+│       │   ├── LogEntry.java
+│       │   ├── Drain.java
+│       │   ├── DrainType.java
+│       │   └── DrainKind.java
+│       ├── AbstractLogsConnection.java
+│       ├── Fetch.java
+│       ├── Stream.java
+│       ├── ListDrains.java
+│       ├── CreateDrain.java
+│       ├── DeleteDrain.java
+│       └── LogPatternTrigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
 │   ├── AbstractClevercloudTest.java
 │   ├── applications/
@@ -117,20 +139,28 @@ plugin-clevercloud/
 │   │   ├── GetTest.java
 │   │   ├── WaitForStateTest.java
 │   │   └── TriggerTest.java
-│   └── organisations/
-│       ├── GetTest.java
-│       ├── ListMembersTest.java
-│       ├── AddMemberTest.java
-│       ├── RemoveMemberTest.java
-│       ├── ListAddonsTest.java
-│       └── MemberChangeTriggerTest.java
+│   ├── organisations/
+│   │   ├── GetTest.java
+│   │   ├── ListMembersTest.java
+│   │   ├── AddMemberTest.java
+│   │   ├── RemoveMemberTest.java
+│   │   ├── ListAddonsTest.java
+│   │   └── MemberChangeTriggerTest.java
+│   └── logs/
+│       ├── FetchTest.java
+│       ├── StreamTest.java
+│       ├── ListDrainsTest.java
+│       ├── CreateDrainTest.java
+│       ├── DeleteDrainTest.java
+│       └── LogPatternTriggerTest.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
 │       ├── index.yaml
 │       ├── applications.yaml
 │       ├── deployments.yaml
-│       └── organisations.yaml
+│       ├── organisations.yaml
+│       └── logs.yaml
 ├── build.gradle
 └── README.md
 ```
@@ -152,6 +182,13 @@ plugin-clevercloud/
 - `Redeploy` and `Restart` share the query-string building for `.../applications/{appId}/instances` via `AbstractCleverCloudConnection.instancesUrl(baseUrl, organisationId, applicationId, queryParams)`.
 - `Redeploy` and `Restart` both call `POST .../applications/{appId}/instances`; the only difference is that `Restart` never sends a `commit` query param, so it always redeploys the currently deployed commit instead of a caller-specified one.
 - `buildPutRequest` was added to `AbstractCleverCloudConnection` alongside the existing `buildGetRequest`/`buildPostRequest`/`buildDeleteRequest` to support `SetEnv` and `Scale`.
+- The `logs` package targets Clever Cloud APIv4, not v2: there is no `GET /v2/logs/{addonId}` or `/v2/organisations/.../applications/.../logs` endpoint reachable on the live API (confirmed with unauthenticated probes returning a generic gateway 404, unlike real v2 routes which return a JSON 401). The only real, live, Bearer-gated application log endpoint is `GET /v4/logs/organisations/{organisationId}/applications/{applicationId}/logs`, confirmed reachable through `api-bridge.clever-cloud.com` (a fake Bearer token returns `401 invalid-token`, matching the rest of this plugin's auth pattern).
+- That v4 logs endpoint is SSE-based (`Accept: text/event-stream`) even for a bounded historical fetch: the connection closes on its own once the requested `until` timestamp is reached. Kestra's `io.kestra.core.http.client.HttpClient#sseRequest` (available since kestraVersion 1.3.0, before this plugin's current 1.3.13) supports this natively, the same primitive `io.kestra.plugin.core.http.SseRequest` uses, so both `logs.Fetch` (bounded) and `logs.Stream` (bounded live tail, capped at PT15M) were implemented rather than skipped.
+- `HttpClient#sseRequest` does not enforce allowed status codes the way `HttpClient#request` does, so `AbstractLogsConnection#fetchLogs` manually checks the response status after the SSE body is consumed and throws the same body-free `HttpClientResponseException` as `AbstractCleverCloudConnection#makeCall` on a non-2xx response.
+- Log drains (`GET`/`POST /v4/drains/organisations/{organisationId}/applications/{applicationId}/drains`, `DELETE .../drains/{drainId}`) are confirmed reachable the same way (fake Bearer token returns `401 invalid-token`). `CreateDrain`'s request body shape (`kind` + `recipient.type`/`url`/credentials) was cross-checked against the official `@clevercloud/client` JS client (`CreateLogDrainCommand`) rather than guessed, since neither endpoint appears in `https://api.clever-cloud.com/v2/openapi.json`.
+- There is no `OVHCLOUD` drain type on the real API: `DrainType` only has `RAW_HTTP`, `SYSLOG_TCP`, `SYSLOG_UDP`, `DATADOG`, `ELASTICSEARCH`, `NEWRELIC`, matching the recipient types the API actually accepts.
+- `CreateDrain` does not poll for the created drain to reach `ENABLED` (the official JS client does, via `waitForLogDrainEnabled`): it returns as soon as the API responds, consistent with how `applications.Create` doesn't wait for the app to reach `RUNNING` either.
+- `LogPatternTrigger` reuses the same bounded-window SSE fetch as `Fetch`/`Stream` (via the package-private static helpers on `AbstractLogsConnection`, accessible because the trigger lives in the same package) and dedups on `date` strictly-after the previous evaluation cutoff, mirroring `deployments.Trigger`'s cutoff pattern rather than `MemberChangeTrigger`'s KV-diff pattern, since log lines carry a timestamp.
 
 ## References
 

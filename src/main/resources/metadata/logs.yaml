@@ -1,0 +1,8 @@
+group: io.kestra.plugin.clevercloud.logs
+name: "logs"
+title: "Clever Cloud Logs"
+description: "Tasks and triggers for fetching, streaming, and forwarding Clever Cloud application logs."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
