@@ -26,6 +26,7 @@ Source packages under `io.kestra.plugin`:
 - `clevercloud.applications` (application lifecycle tasks: list, get, env, create, scale, redeploy, restart, stop, delete)
 - `clevercloud.deployments` (deployment tasks and trigger)
 - `clevercloud.organisations` (organisation and member management tasks and trigger)
+- `clevercloud.addons` (add-on provisioning, inspection, application linking tasks and trigger)
 
 Infrastructure dependencies (Docker Compose services):
 
@@ -52,8 +53,15 @@ Infrastructure dependencies (Docker Compose services):
 - `io.kestra.plugin.clevercloud.organisations.ListMembers` - list organisation members
 - `io.kestra.plugin.clevercloud.organisations.AddMember` - invite a user to the organisation
 - `io.kestra.plugin.clevercloud.organisations.RemoveMember` - remove a user from the organisation
-- `io.kestra.plugin.clevercloud.organisations.ListAddons` - list add-ons in the organisation
 - `io.kestra.plugin.clevercloud.organisations.MemberChangeTrigger` - polling trigger that fires when member set changes
+- `io.kestra.plugin.clevercloud.addons.List` - list add-ons, full `AddonView` shape, supports `fetchType` (canonical listing task, aliases the removed `organisations.ListAddons`)
+- `io.kestra.plugin.clevercloud.addons.Get` - get a single add-on by ID (plan, provider, region, creationDate, configKeys)
+- `io.kestra.plugin.clevercloud.addons.Create` - provision a new add-on (providerId, plan, region required by the API; name, version optional)
+- `io.kestra.plugin.clevercloud.addons.GetEnv` - get all environment variables (connection credentials) of an add-on as a map
+- `io.kestra.plugin.clevercloud.addons.LinkToApplication` - attach an add-on to an application via `POST .../applications/{appId}/addons`
+- `io.kestra.plugin.clevercloud.addons.UnlinkFromApplication` - detach an add-on from an application via `DELETE .../applications/{appId}/addons/{addonId}`
+- `io.kestra.plugin.clevercloud.addons.Delete` - delete an add-on via `DELETE .../addons/{addonId}`
+- `io.kestra.plugin.clevercloud.addons.AddonProvisionedTrigger` - polling trigger that fires when a new add-on appears in the add-on list
 
 ### Project Structure
 
@@ -87,18 +95,30 @@ plugin-clevercloud/
 │   │   ├── Get.java
 │   │   ├── WaitForState.java
 │   │   └── Trigger.java
-│   └── organisations/
+│   ├── organisations/
+│   │   ├── package-info.java
+│   │   ├── model/
+│   │   │   ├── Organisation.java
+│   │   │   └── Member.java
+│   │   ├── Get.java
+│   │   ├── ListMembers.java
+│   │   ├── AddMember.java
+│   │   ├── RemoveMember.java
+│   │   └── MemberChangeTrigger.java
+│   └── addons/
 │       ├── package-info.java
 │       ├── model/
-│       │   ├── Organisation.java
-│       │   ├── Member.java
-│       │   └── Addon.java
+│       │   ├── Addon.java
+│       │   ├── EnvironmentVariable.java
+│       │   └── Message.java
+│       ├── List.java
 │       ├── Get.java
-│       ├── ListMembers.java
-│       ├── AddMember.java
-│       ├── RemoveMember.java
-│       ├── ListAddons.java
-│       └── MemberChangeTrigger.java
+│       ├── Create.java
+│       ├── GetEnv.java
+│       ├── LinkToApplication.java
+│       ├── UnlinkFromApplication.java
+│       ├── Delete.java
+│       └── AddonProvisionedTrigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
 │   ├── AbstractClevercloudTest.java
 │   ├── applications/
@@ -117,20 +137,29 @@ plugin-clevercloud/
 │   │   ├── GetTest.java
 │   │   ├── WaitForStateTest.java
 │   │   └── TriggerTest.java
-│   └── organisations/
+│   ├── organisations/
+│   │   ├── GetTest.java
+│   │   ├── ListMembersTest.java
+│   │   ├── AddMemberTest.java
+│   │   ├── RemoveMemberTest.java
+│   │   └── MemberChangeTriggerTest.java
+│   └── addons/
+│       ├── ListTest.java
 │       ├── GetTest.java
-│       ├── ListMembersTest.java
-│       ├── AddMemberTest.java
-│       ├── RemoveMemberTest.java
-│       ├── ListAddonsTest.java
-│       └── MemberChangeTriggerTest.java
+│       ├── CreateTest.java
+│       ├── GetEnvTest.java
+│       ├── LinkToApplicationTest.java
+│       ├── UnlinkFromApplicationTest.java
+│       ├── DeleteTest.java
+│       └── AddonProvisionedTriggerTest.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
 │       ├── index.yaml
 │       ├── applications.yaml
 │       ├── deployments.yaml
-│       └── organisations.yaml
+│       ├── organisations.yaml
+│       └── addons.yaml
 ├── build.gradle
 └── README.md
 ```
@@ -139,15 +168,19 @@ plugin-clevercloud/
 
 - `apiToken` is the single credential for the whole plugin and must be marked `@PluginProperty(group = "connection", secret = true)`.
 - The default base URL is `https://api-bridge.clever-cloud.com/v2`. `baseUrl()` is overridable per class (used by tests to point at WireMock).
-- `organisationId` is optional on `Get` and `ListAddons` (organisations package) and on `applications.List`: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`. It is required on `ListMembers`, `AddMember`, `RemoveMember`, and `MemberChangeTrigger` because `/self/members` does not exist on the Clever Cloud API.
+- `organisationId` is optional on `Get` (organisations package), `applications.List`, and `addons.List`/`Get`/`Create`/`GetEnv`/`LinkToApplication`/`UnlinkFromApplication`/`Delete`: when omitted, calls target the personal account endpoint (`/self`) instead of `/organisations/{id}`. It is required on `ListMembers`, `AddMember`, `RemoveMember`, and `MemberChangeTrigger` because `/self/members` does not exist on the Clever Cloud API.
 - Base the wording on the implemented packages and classes, not on template README text.
-- `Trigger` (deployments) and `MemberChangeTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
+- `Trigger` (deployments), `MemberChangeTrigger`, and `AddonProvisionedTrigger` use a plain `Duration` field for `interval` (not `Property<Duration>`) because `PollingTriggerInterface.getInterval()` returns `Duration`.
 - `MemberChangeTrigger` uses `runContext.namespaceKv()` to persist the member ID set between evaluations (no timestamps in the members response), keyed by flow id + trigger id + organisation id so triggers with the same id in different flows do not collide.
-- `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use `applications.List`/`ListAddons` for personal accounts.
+- `GET /v2/organisations/{orgId}` returns 403 for personal user accounts (user_xxx). Use `applications.List`/`addons.List` for personal accounts.
 - All task/trigger tests extend `io.kestra.plugin.clevercloud.AbstractClevercloudTest` for shared `@KestraTest`/`@WireMockTest` wiring and WireMock helpers. Each test file declares its own nested `Testable*` subclass overriding `baseUrl()`.
 - `applications.List` is the single canonical task for listing applications. `organisations.ListApplications` was removed and is now a deprecated alias resolving to `applications.List` via `@Plugin(aliases = "io.kestra.plugin.clevercloud.organisations.ListApplications")`, so existing flows referencing the old type keep working unchanged.
+- `addons.List` is the single canonical task for listing add-ons. `organisations.ListAddons` was removed and is now a deprecated alias resolving to `addons.List` via `@Plugin(aliases = "io.kestra.plugin.clevercloud.organisations.ListAddons")`, mirroring the `applications.List`/`organisations.ListApplications` precedent so existing flows keep working unchanged.
 - No `applications.RedeployTrigger` was added: `deployments.Trigger` already polls the deployment list and fires on state changes, which covers the same use case (react to a new deployment reaching a target state) without a second competing trigger.
 - The bulk `PUT .../applications/{appId}/env` endpoint's request body is untyped (`string`) in the Clever Cloud OpenAPI spec, so `SetEnv` uses the unambiguous per-variable endpoint `PUT .../env/{envName}` with body `{"value": ...}` instead, one HTTP call per variable.
+- The real `AddonView` schema (verified against `https://api.clever-cloud.com/v2/openapi.json`) has no status/state field at all, unlike `SuperNovaInstanceView` (application instances) which does have a `READY` state. Add-ons are provisioned synchronously by the API: there is nothing to poll for readiness. `addons.AddonProvisionedTrigger` therefore detects newly provisioned add-ons via `creationDate` (present on `AddonView`), the same cutoff-based dedup pattern as `deployments.Trigger`, instead of a nonexistent "READY" status.
+- `addons.Create`'s request body is `WannabeAddonProvision`: only `providerId`, `plan`, and `region` are `required` in the real OpenAPI schema (`name`, `version`, `linkedApp`, `options`, and payment fields are all optional). `linkedApp` is intentionally not exposed on `Create` since `addons.LinkToApplication` already covers attaching an add-on to an application.
+- `addons.LinkToApplication`'s `POST .../applications/{appId}/addons` request body is a bare JSON string (the add-on ID), not an object, per the OpenAPI schema (`"type": "string"`). `LinkToApplication`/`UnlinkFromApplication` responses are untyped (`default` response, no schema) in the spec, so both tasks return `VoidOutput` rather than parsing an unspecified body.
 - `Scale` and `Create` share the `WannabeApplication` PUT/POST target (`.../applications` and `.../applications/{appId}`); `Scale` first `GET`s the current application, rebuilds the full `WannabeApplication` body from it, then overlays only the min/max instance and flavor fields the caller set, so a scale request can never clear name/zone/instance type/version if the API replaces rather than merges the body.
 - `Redeploy` and `Restart` share the query-string building for `.../applications/{appId}/instances` via `AbstractCleverCloudConnection.instancesUrl(baseUrl, organisationId, applicationId, queryParams)`.
 - `Redeploy` and `Restart` both call `POST .../applications/{appId}/instances`; the only difference is that `Restart` never sends a `commit` query param, so it always redeploys the currently deployed commit instead of a caller-specified one.

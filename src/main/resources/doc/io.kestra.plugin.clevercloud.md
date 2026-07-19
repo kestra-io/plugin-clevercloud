@@ -1,6 +1,6 @@
 # How to use the Clever Cloud plugin
 
-This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/), a Platform-as-a-Service provider. It exposes tasks and triggers for managing applications, application deployments, and organisations via the [Clever Cloud API v2](https://api-bridge.clever-cloud.com/v2/).
+This plugin integrates Kestra with [Clever Cloud](https://www.clever-cloud.com/), a Platform-as-a-Service provider. It exposes tasks and triggers for managing applications, application deployments, organisations, and add-ons via the [Clever Cloud API v2](https://api-bridge.clever-cloud.com/v2/).
 
 ## Authentication
 
@@ -120,9 +120,39 @@ Removes a user from the organisation. Requires `organisationId`, `userId`. Obtai
 
 `io.kestra.plugin.clevercloud.organisations.ListApplications` was removed and is now a deprecated alias of `applications.List`: existing flows using the old type keep working, new flows should use `applications.List` directly.
 
-**`io.kestra.plugin.clevercloud.organisations.ListAddons`**
+`io.kestra.plugin.clevercloud.organisations.ListAddons` was removed and is now a deprecated alias of `addons.List`: existing flows using the old type keep working, new flows should use `addons.List` directly.
 
-Lists all add-ons provisioned in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `addons` (FETCH), `addon` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each add-on entry contains: `id`, `name`, `realId`, `region`, `provider` (with `id`, `name`, `shortDesc`), `plan` (with `id`, `slug`, `name`).
+### addons
+
+Tasks for provisioning, inspecting, and linking add-ons (databases, caches, and other managed services).
+
+**`io.kestra.plugin.clevercloud.addons.List`**
+
+Lists all add-ons provisioned in the organisation or personal account. Optional: `organisationId` (defaults to /self when omitted), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `addons` (FETCH), `addon` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each add-on entry contains: `id`, `name`, `realId`, `region`, `zoneId`, `provider` (with `id`, `name`, `shortDesc`, `logoUrl`), `plan` (with `id`, `name`, `slug`), `creationDate` (epoch milliseconds), `configKeys`.
+
+**`io.kestra.plugin.clevercloud.addons.Get`**
+
+Fetches a single add-on by ID. Required: `addonId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `id`, `name`, `realId`, `region`, `providerId`, `providerName`, `planId`, `planName`, `creationDate`, `configKeys`.
+
+**`io.kestra.plugin.clevercloud.addons.Create`**
+
+Provisions a new add-on. Required: `providerId`, `plan`, `region` (these three are mandatory on the Clever Cloud API). Optional: `organisationId` (defaults to /self when omitted), `name`, `addonVersion`. Provisioning is synchronous: the task returns once the add-on is created and usable. Outputs: `id`, `name`, `region`, `providerId`, `planId`, `creationDate`.
+
+**`io.kestra.plugin.clevercloud.addons.GetEnv`**
+
+Fetches the add-on's environment variables (connection credentials). Required: `addonId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `variables` (map of name to value), `total`. Returns credentials in plain text: avoid logging or persisting its output.
+
+**`io.kestra.plugin.clevercloud.addons.LinkToApplication`**
+
+Attaches an existing add-on to an application via `POST .../applications/{appId}/addons`. Required: `applicationId`, `addonId`. Optional: `organisationId` (defaults to /self when omitted). Returns no output.
+
+**`io.kestra.plugin.clevercloud.addons.UnlinkFromApplication`**
+
+Detaches an add-on from an application via `DELETE .../applications/{appId}/addons/{addonId}`. The add-on itself is not deleted. Required: `applicationId`, `addonId`. Optional: `organisationId` (defaults to /self when omitted). Returns no output.
+
+**`io.kestra.plugin.clevercloud.addons.Delete`**
+
+Permanently deletes the add-on via `DELETE .../addons/{addonId}`. Required: `addonId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `message`.
 
 ## Triggers
 
@@ -135,3 +165,7 @@ The minimum recommended `interval` is PT30S to avoid rate-limiting the Clever Cl
 **`io.kestra.plugin.clevercloud.organisations.MemberChangeTrigger`**
 
 Polls the member list of an organisation at each `interval` and fires when the member set changes. Uses KV store to persist the member ID set between evaluations (the members endpoint has no timestamps). The first evaluation always establishes a baseline and never fires. Subsequent polls fire only when a change is detected. Requires `organisationId`, `event` (MEMBER_ADDED, MEMBER_REMOVED, or MEMBER_CHANGED). Outputs via `{{ trigger.* }}`: `organisationId`, `addedMembers` (list of user IDs), `removedMembers` (list of user IDs).
+
+**`io.kestra.plugin.clevercloud.addons.AddonProvisionedTrigger`**
+
+Polls the add-on list for an organisation or personal account at each `interval` and fires when a new add-on is detected. The Clever Cloud API provisions add-ons synchronously and add-ons have no "READY" status field, so new add-ons are detected by `creationDate` instead: only add-ons created strictly after the previous evaluation fire the trigger. Optional: `organisationId` (defaults to /self when omitted). Outputs via `{{ trigger.* }}`: `addonId`, `name`, `providerId`, `region`.

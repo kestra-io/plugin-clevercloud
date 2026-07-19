@@ -1,0 +1,8 @@
+group: io.kestra.plugin.clevercloud.addons
+name: "addons"
+title: "Clever Cloud Add-ons"
+description: "Tasks and a trigger for managing Clever Cloud add-ons: databases, caches, and other managed services."
+body: ""
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
