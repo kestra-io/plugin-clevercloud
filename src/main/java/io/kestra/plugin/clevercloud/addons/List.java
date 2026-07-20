@@ -1,4 +1,4 @@
-package io.kestra.plugin.clevercloud.organisations;
+package io.kestra.plugin.clevercloud.addons;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.kestra.core.models.annotations.Example;
@@ -9,7 +9,7 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.clevercloud.AbstractCleverCloudConnection;
-import io.kestra.plugin.clevercloud.organisations.model.Addon;
+import io.kestra.plugin.clevercloud.addons.model.Addon;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -20,7 +20,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -45,7 +44,7 @@ import java.util.List;
 
                 tasks:
                   - id: list
-                    type: io.kestra.plugin.clevercloud.organisations.ListAddons
+                    type: io.kestra.plugin.clevercloud.addons.List
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 """
@@ -59,13 +58,14 @@ import java.util.List;
 
                 tasks:
                   - id: list
-                    type: io.kestra.plugin.clevercloud.organisations.ListAddons
+                    type: io.kestra.plugin.clevercloud.addons.List
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                 """
         )
-    }
+    },
+    aliases = "io.kestra.plugin.clevercloud.organisations.ListAddons"
 )
-public class ListAddons extends AbstractCleverCloudConnection implements RunnableTask<ListAddons.Output> {
+public class List extends AbstractCleverCloudConnection implements RunnableTask<List.Output> {
 
     @Schema(
         title = "Organisation ID",
@@ -112,7 +112,7 @@ public class ListAddons extends AbstractCleverCloudConnection implements Runnabl
             title = "List of add-ons in the organisation or personal account",
             description = "Populated when fetchType is FETCH."
         )
-        private final List<Addon> addons;
+        private final java.util.List<Addon> addons;
 
         @Schema(
             title = "First add-on returned by the API",
