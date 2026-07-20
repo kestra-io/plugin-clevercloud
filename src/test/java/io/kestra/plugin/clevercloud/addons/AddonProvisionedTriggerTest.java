@@ -1,16 +1,15 @@
 package io.kestra.plugin.clevercloud.addons;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
-import io.kestra.core.junit.annotations.KestraTest;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.runners.DefaultRunContext;
-import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.runners.RunContextInitializer;
+import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import jakarta.inject.Inject;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -20,9 +19,11 @@ import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -33,22 +34,24 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
 
-@KestraTest
-@WireMockTest
-class AddonProvisionedTriggerTest {
-
-    @Inject
-    RunContextFactory runContextFactory;
+class AddonProvisionedTriggerTest extends AbstractClevercloudTest {
 
     @Inject
     RunContextInitializer runContextInitializer;
 
+    // Each test gets a unique trigger ID to prevent KV store state leaking between tests.
+    private String triggerId;
+
+    private String buildTriggerId() {
+        return "trigger-addon-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
     private AddonProvisionedTrigger buildTrigger(String baseUrl) {
         return TestableTrigger.builder()
-            .id("addon-provisioned-trigger-test")
+            .id(triggerId)
             .type(AddonProvisionedTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
@@ -59,7 +62,7 @@ class AddonProvisionedTriggerTest {
 
     private AddonProvisionedTrigger buildTriggerWithoutOrg(String baseUrl) {
         return TestableTrigger.builder()
-            .id("addon-provisioned-trigger-self-test")
+            .id(triggerId)
             .type(AddonProvisionedTrigger.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .interval(Duration.ofMinutes(1))
@@ -67,10 +70,12 @@ class AddonProvisionedTriggerTest {
             .build();
     }
 
-    private ConditionContext conditionContext(AddonProvisionedTrigger trigger, TriggerContext triggerContext) throws Exception {
+    private ConditionContext conditionContext(AddonProvisionedTrigger trigger, TriggerContext triggerContext, String flowId) throws Exception {
+        // tenantId must be non-null: the local storage backend uses it as a path segment and NPEs otherwise.
         var flow = Flow.builder()
-            .id("test-flow")
+            .id(flowId)
             .namespace("company.team")
+            .tenantId("test-tenant")
             .build();
         var baseRunContext = (DefaultRunContext) runContextFactory.of(flow, trigger);
         var runContext = runContextInitializer.forScheduler(baseRunContext, triggerContext, trigger);
@@ -80,124 +85,101 @@ class AddonProvisionedTriggerTest {
             .build();
     }
 
-    private TriggerContext triggerContext(ZonedDateTime date) {
+    private TriggerContext triggerContext(String flowId) {
         return TriggerContext.builder()
+            .tenantId("test-tenant")
             .namespace("company.team")
-            .flowId("test-flow")
-            .triggerId("addon-provisioned-trigger-test")
-            .date(date)
+            .flowId(flowId)
+            .triggerId(triggerId)
+            .date(ZonedDateTime.now())
             .build();
     }
 
-    @Test
-    void firesWhenNewAddonIsProvisioned(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        var lastPoll = ZonedDateTime.now().minusMinutes(10);
-        var creationEpochMillis = Instant.now().minusSeconds(300).toEpochMilli();
+    private static final String ADDON_A_JSON = """
+        [
+          {"id": "addon_aaa", "name": "my-redis", "region": "par", "provider": {"id": "redis-addon"}}
+        ]
+        """;
 
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
-            .willReturn(okJson("""
-                [
-                  {
-                    "id": "addon_new-001",
-                    "name": "my-postgres",
-                    "region": "par",
-                    "provider": {"id": "postgresql-addon"},
-                    "creationDate": %d
-                  }
-                ]
-                """.formatted(creationEpochMillis))));
+    private static final String ADDON_AB_JSON = """
+        [
+          {"id": "addon_aaa", "name": "my-redis", "region": "par", "provider": {"id": "redis-addon"}},
+          {"id": "addon_bbb", "name": "my-postgres", "region": "par", "provider": {"id": "postgresql-addon"}, "plan": {"id": "plan_bbb"}}
+        ]
+        """;
+
+    @Test
+    void firstEvaluationStoresBaselineAndDoesNotFire(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubGetJson("/organisations/orga_test/addons", ADDON_A_JSON);
 
         var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext(lastPoll);
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
-        assertThat(result.isPresent(), is(true));
-        assertThat(result.get(), notNullValue());
-        verify(1, getRequestedFor(urlPathEqualTo("/organisations/orga_test/addons")));
+        assertThat("first evaluation must not fire", result.isEmpty(), is(true));
     }
 
     @Test
-    void doesNotRefireOnAlreadySeenAddon(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        var lastPoll = ZonedDateTime.now().minusMinutes(5);
-        var oldCreationEpochMillis = Instant.now().minusSeconds(900).toEpochMilli();
-
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
-            .willReturn(okJson("""
-                [
-                  {
-                    "id": "addon_old-002",
-                    "name": "my-redis",
-                    "region": "par",
-                    "creationDate": %d
-                  }
-                ]
-                """.formatted(oldCreationEpochMillis))));
+    void doesNotRefireWhenAddonSetUnchanged(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
+        stubGetJson("/organisations/orga_test/addons", ADDON_A_JSON);
 
         var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext(lastPoll);
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
+
+        trigger.evaluate(condCtx, trigCtx);
 
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
-        assertThat("trigger must not re-fire on an add-on provisioned before the last poll", result.isEmpty(), is(true));
+        assertThat("trigger must not re-fire on an unchanged add-on set", result.isEmpty(), is(true));
     }
 
     @Test
-    void doesNotFireOnAddonWithMissingCreationDate(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        var lastPoll = ZonedDateTime.now().minusMinutes(10);
-
+    void firesWhenNewAddonAppears(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        triggerId = buildTriggerId();
         stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
-            .willReturn(okJson("""
-                [
-                  {"id": "addon_nodate-003", "name": "my-mongo"}
-                ]
-                """)));
+            .inScenario("addon-added")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(ADDON_A_JSON))
+            .willSetStateTo("baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
+            .inScenario("addon-added")
+            .whenScenarioStateIs("baseline-set")
+            .willReturn(okJson(ADDON_AB_JSON)));
 
         var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext(lastPoll);
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
+
+        trigger.evaluate(condCtx, trigCtx);
 
         Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
 
-        assertThat("add-on with no creationDate must be skipped", result.isEmpty(), is(true));
-    }
-
-    @Test
-    void firesOnlyOnceWhenMultipleAddonsMatch(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        var lastPoll = ZonedDateTime.now().minusMinutes(10);
-        var epoch1 = Instant.now().minusSeconds(120).toEpochMilli();
-        var epoch2 = Instant.now().minusSeconds(60).toEpochMilli();
-
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
-            .willReturn(okJson("""
-                [
-                  {"id": "addon_multi-004", "creationDate": %d},
-                  {"id": "addon_multi-005", "creationDate": %d}
-                ]
-                """.formatted(epoch1, epoch2))));
-
-        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext(lastPoll);
-        var condCtx = conditionContext(trigger, trigCtx);
-
-        Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
-
-        assertThat("trigger must fire when at least one add-on is new", result.isPresent(), is(true));
-        verify(1, getRequestedFor(urlPathEqualTo("/organisations/orga_test/addons")));
+        assertThat("trigger must fire when a new add-on appears", result.isPresent(), is(true));
+        @SuppressWarnings("unchecked")
+        var triggerVars = (Map<String, Object>) result.get().getTrigger().getVariables();
+        @SuppressWarnings("unchecked")
+        var addonIds = (List<String>) triggerVars.get("addonIds");
+        assertThat(addonIds, contains("addon_bbb"));
+        assertThat(triggerVars.get("addonId"), is("addon_bbb"));
+        assertThat(triggerVars.get("name"), is("my-postgres"));
+        assertThat(triggerVars.get("providerId"), is("postgresql-addon"));
+        assertThat(triggerVars.get("planId"), is("plan_bbb"));
+        assertThat(triggerVars.get("region"), is("par"));
     }
 
     @Test
     void sendsBearerAuthorizationHeader(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        var lastPoll = ZonedDateTime.now().minusMinutes(10);
-
-        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
-            .willReturn(okJson("[]")));
+        triggerId = buildTriggerId();
+        stubGetJson("/organisations/orga_test/addons", ADDON_A_JSON);
 
         var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = triggerContext(lastPoll);
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
@@ -207,24 +189,58 @@ class AddonProvisionedTriggerTest {
 
     @Test
     void usesSelfPathWhenOrgIdOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
-        var lastPoll = ZonedDateTime.now().minusMinutes(10);
-
-        stubFor(get(urlPathEqualTo("/self/addons"))
-            .willReturn(okJson("[]")));
+        triggerId = buildTriggerId();
+        stubGetJson("/self/addons", "[]");
 
         var trigger = buildTriggerWithoutOrg(wireMockRuntimeInfo.getHttpBaseUrl());
-        var trigCtx = TriggerContext.builder()
-            .namespace("company.team")
-            .flowId("test-flow")
-            .triggerId("addon-provisioned-trigger-self-test")
-            .date(lastPoll)
-            .build();
-        var condCtx = conditionContext(trigger, trigCtx);
+        var trigCtx = triggerContext("test-flow");
+        var condCtx = conditionContext(trigger, trigCtx, "test-flow");
 
         trigger.evaluate(condCtx, trigCtx);
 
         verify(getRequestedFor(urlPathEqualTo("/self/addons")));
-        verify(0, getRequestedFor(urlPathMatching("/organisations/.*")));
+        verifyNeverCalled("/organisations/.*");
+    }
+
+    @Test
+    void sameTriggerIdInDifferentFlowsDoNotShareKvBaseline(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        // Regression test: the KV key must include flowId, or two flows sharing a triggerId on the
+        // same org would clobber each other's baseline (both triggers below share one on purpose).
+        triggerId = buildTriggerId();
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
+            .inScenario("flow-isolation")
+            .whenScenarioStateIs(Scenario.STARTED)
+            .willReturn(okJson(ADDON_A_JSON))
+            .willSetStateTo("flow-a-baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
+            .inScenario("flow-isolation")
+            .whenScenarioStateIs("flow-a-baseline-set")
+            .willReturn(okJson(ADDON_AB_JSON))
+            .willSetStateTo("flow-b-baseline-set"));
+        stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
+            .inScenario("flow-isolation")
+            .whenScenarioStateIs("flow-b-baseline-set")
+            .willReturn(okJson(ADDON_A_JSON)));
+
+        var triggerA = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
+        var trigCtxA = triggerContext("flow-a");
+        var condCtxA = conditionContext(triggerA, trigCtxA, "flow-a");
+
+        var resultA1 = triggerA.evaluate(condCtxA, trigCtxA);
+        assertThat("flow-a first evaluation must not fire", resultA1.isEmpty(), is(true));
+
+        var triggerB = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
+        var trigCtxB = triggerContext("flow-b");
+        var condCtxB = conditionContext(triggerB, trigCtxB, "flow-b");
+
+        // If the KV key collided on trigger id alone, flow-b would compare against flow-a's baseline and fire here.
+        var resultB1 = triggerB.evaluate(condCtxB, trigCtxB);
+        assertThat("flow-b first evaluation must not fire, since it establishes its own baseline",
+            resultB1.isEmpty(), is(true));
+
+        // If flow-b's poll had clobbered the shared KV entry, this would incorrectly detect addon_bbb as new.
+        var resultA2 = triggerA.evaluate(condCtxA, trigCtxA);
+        assertThat("flow-a must not fire on its own unchanged add-on set", resultA2.isEmpty(), is(true));
     }
 
     @SuperBuilder
