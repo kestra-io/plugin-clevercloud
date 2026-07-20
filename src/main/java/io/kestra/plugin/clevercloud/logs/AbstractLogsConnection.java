@@ -133,10 +133,9 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
         var lastEventAt = new AtomicReference<>(Instant.now());
         var timedOut = new AtomicBoolean(false);
 
-        var client = new HttpClient(runContext, options);
         var executor = Executors.newSingleThreadExecutor();
         var watchdog = Executors.newSingleThreadScheduledExecutor();
-        try {
+        try (var client = new HttpClient(runContext, options)) {
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("GET")
@@ -173,7 +172,8 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                     return;
                 }
                 if (timedOut.compareAndSet(false, true)) {
-                    logger.debug("Closing Clever Cloud logs SSE connection after a client-side timeout");
+                    // Force-closes the client to unblock the worker thread stuck in sseRequest.
+                    // The try-with-resources close on the normal exit path is then a harmless no-op.
                     try {
                         client.close();
                     } catch (IOException e) {
@@ -206,15 +206,14 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 client.close();
             }
 
-            // Covers both ways a forced close can surface to the blocked reader: an IOException
-            // (most common) or a graceful EOF that just ends the SSE parse loop with no exception.
+            // The v4 logs SSE endpoint never closes on its own for a live tail or an idle-open historical
+            // fetch, so hitting the client-side limit is the normal, every-run path, not a warning.
             if (timedOut.get()) {
-                logger.debug("Clever Cloud logs SSE stream did not close on its own, stopped after a client-side timeout with {} entries collected", entries.size());
+                logger.debug("Stopped logs SSE after client-side limit, collected {} entries", entries.size());
             }
         } finally {
             executor.shutdownNow();
             watchdog.shutdownNow();
-            client.close();
         }
 
         synchronized (entries) {
