@@ -109,8 +109,7 @@ plugin-clevercloud/
 │       ├── package-info.java
 │       ├── model/
 │       │   ├── Addon.java
-│       │   ├── EnvironmentVariable.java
-│       │   └── Message.java
+│       │   └── EnvironmentVariable.java
 │       ├── List.java
 │       ├── Get.java
 │       ├── Create.java
@@ -186,6 +185,8 @@ plugin-clevercloud/
 - `Redeploy` and `Restart` share the query-string building for `.../applications/{appId}/instances` via `AbstractCleverCloudConnection.instancesUrl(baseUrl, organisationId, applicationId, queryParams)`.
 - `Redeploy` and `Restart` both call `POST .../applications/{appId}/instances`; the only difference is that `Restart` never sends a `commit` query param, so it always redeploys the currently deployed commit instead of a caller-specified one.
 - `buildPutRequest` was added to `AbstractCleverCloudConnection` alongside the existing `buildGetRequest`/`buildPostRequest`/`buildDeleteRequest` to support `SetEnv` and `Scale`.
+- `addons.AddonProvisionedTrigger.evaluate()` delegates the actual add-on fetch to `addons.List` (built via `buildListTask()`, `fetchType` forced to `FETCH`) instead of hand-rolling its own HTTP call, so both entry points share one implementation. `buildListTask()` is a protected hook overridden only in `AddonProvisionedTriggerTest` (not in main source) to route the delegate at a WireMock base URL: an earlier attempt at wiring a `baseUrl()`-overriding `List` subclass directly into the trigger's main source broke Kestra's plugin registry scan for the whole module (every test failed with `No storage interface can be found for 'kestra.storage.type=local'. Supported types are: []`, since the registry scan for the module's own classes choked on an unregistered `RunnableTask` subclass with no `@Plugin`/`@Schema` metadata). Keeping the override confined to test source (mirroring the existing `Testable*` pattern already proven safe by `ListTest.TestableList`) avoids that entirely.
+- `addons.Delete` returns `VoidOutput` instead of parsing the delete confirmation message: the response body carries no information a flow needs to act on, so the `addons.model.Message` class (previously used only here) was removed along with the parsing.
 
 ## References
 

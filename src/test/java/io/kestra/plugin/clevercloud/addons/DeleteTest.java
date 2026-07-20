@@ -22,6 +22,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DeleteTest extends AbstractClevercloudTest {
@@ -42,7 +43,7 @@ class DeleteTest extends AbstractClevercloudTest {
 
         var output = task.run(runContext());
 
-        assertThat(output.getMessage(), is("Add-on deleted"));
+        assertThat(output, is(nullValue()));
         verify(deleteRequestedFor(urlPathEqualTo("/organisations/orga_test/addons/addon_abc123")));
     }
 

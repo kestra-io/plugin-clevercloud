@@ -152,7 +152,7 @@ Detaches an add-on from an application via `DELETE .../applications/{appId}/addo
 
 **`io.kestra.plugin.clevercloud.addons.Delete`**
 
-Permanently deletes the add-on via `DELETE .../addons/{addonId}`. Required: `addonId`. Optional: `organisationId` (defaults to /self when omitted). Outputs: `message`.
+Permanently deletes the add-on via `DELETE .../addons/{addonId}`. Required: `addonId`. Optional: `organisationId` (defaults to /self when omitted). Returns no output.
 
 ## Triggers
 
