@@ -85,6 +85,7 @@ public class AddonProvisionedTrigger extends AbstractTrigger
     @NotNull
     @Schema(title = "API token", description = "Bearer token for the Clever Cloud API. Store as a Kestra secret and reference with {{ secret('CC_API_TOKEN') }}.")
     @PluginProperty(group = "connection", secret = true)
+    @ToString.Exclude
     private Property<String> apiToken;
 
     @Schema(title = "HTTP client options", description = "Optional HttpConfiguration applied to every Clever Cloud API call, including timeouts and proxy settings.")

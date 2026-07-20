@@ -199,6 +199,31 @@ class ListTest extends AbstractClevercloudTest {
     }
 
     @Test
+    void fetchTypeNoneReturnsOnlyCount(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubGetJson("/organisations/orga_test/addons", """
+            [
+              {"id": "addon_none-1", "name": "first"}
+            ]
+            """);
+
+        var task = TestableList.builder()
+            .id("list-addons-none-test")
+            .type(List.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .fetchType(Property.ofValue(FetchType.NONE))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var output = task.run(runContext());
+
+        assertThat(output.getTotal(), is(1));
+        assertThat(output.getAddons(), is(nullValue()));
+        assertThat(output.getAddon(), is(nullValue()));
+        assertThat(output.getUri(), is(nullValue()));
+    }
+
+    @Test
     void throwsCleanExceptionOn500WithoutBodyLeak(WireMockRuntimeInfo wireMockRuntimeInfo) {
         stubFor(get(urlPathEqualTo("/organisations/orga_test/addons"))
             .willReturn(aResponse().withStatus(500)

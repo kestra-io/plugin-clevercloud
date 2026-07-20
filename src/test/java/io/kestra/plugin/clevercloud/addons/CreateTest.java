@@ -1,6 +1,7 @@
 package io.kestra.plugin.clevercloud.addons;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import lombok.EqualsAndHashCode;
@@ -10,7 +11,9 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 import org.junit.jupiter.api.Test;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -20,6 +23,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class CreateTest extends AbstractClevercloudTest {
@@ -250,6 +254,59 @@ class CreateTest extends AbstractClevercloudTest {
         verify(0, postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons")));
     }
 
+    @Test
+    void fallsBackToPublicCatalogWhenPrimaryUnreachable(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        // /products/addonproviders is intentionally left unstubbed so WireMock returns 404 for the primary attempt.
+        stubGetJson("/fallback/products/addonproviders", PROVIDERS_CATALOG_JSON);
+        stubFor(post(urlPathEqualTo("/organisations/orga_test/addons"))
+            .willReturn(okJson("{\"id\": \"addon_new-0006\"}")));
+
+        var task = TestableCreate.builder()
+            .id("create-addon-fallback-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .providerId(Property.ofValue("azimutt"))
+            .plan(Property.ofValue("solo"))
+            .region(Property.ofValue("par"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .testFallbackUrl(wireMockRuntimeInfo.getHttpBaseUrl() + "/fallback/products/addonproviders")
+            .build();
+
+        task.run(runContext());
+
+        verify(postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons"))
+            .withRequestBody(containing("\"plan\":\"plan_solo-0001\"")));
+    }
+
+    @Test
+    void throwsCleanExceptionOnFallbackErrorWithoutBodyLeak(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        // /products/addonproviders is intentionally left unstubbed so WireMock returns 404 for the primary attempt.
+        stubFor(get(urlPathEqualTo("/fallback/products/addonproviders"))
+            .willReturn(aResponse().withStatus(500)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"message\":\"internal secret stack trace details\"}")));
+
+        var task = TestableCreate.builder()
+            .id("create-addon-fallback-error-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .providerId(Property.ofValue("azimutt"))
+            .plan(Property.ofValue("solo"))
+            .region(Property.ofValue("par"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .testFallbackUrl(wireMockRuntimeInfo.getHttpBaseUrl() + "/fallback/products/addonproviders")
+            .build();
+
+        var runContext = runContext();
+        var ex = assertThrows(HttpClientResponseException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), not(containsString("internal secret stack trace details")));
+        assertThat(ex.getMessage(), containsString("500"));
+
+        verify(0, postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons")));
+    }
+
     @SuperBuilder
     @ToString
     @EqualsAndHashCode
@@ -258,10 +315,16 @@ class CreateTest extends AbstractClevercloudTest {
     public static class TestableCreate extends Create {
 
         private String testBaseUrl;
+        private String testFallbackUrl;
 
         @Override
         protected String baseUrl() {
             return testBaseUrl;
+        }
+
+        @Override
+        protected String providersCatalogFallbackUrl() {
+            return testFallbackUrl;
         }
     }
 }

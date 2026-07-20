@@ -2,6 +2,7 @@ package io.kestra.plugin.clevercloud.addons;
 
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.HttpClient;
+import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -123,6 +124,13 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
     // the plugin's configured base URL (e.g. api-bridge) does not expose it.
     private static final String PROVIDERS_CATALOG_FALLBACK_URL = "https://api.clever-cloud.com/v2/products/addonproviders";
 
+    /**
+     * Overridable so tests can redirect the fallback catalog call to WireMock, mirroring {@link #baseUrl()}.
+     */
+    protected String providersCatalogFallbackUrl() {
+        return PROVIDERS_CATALOG_FALLBACK_URL;
+    }
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
@@ -180,7 +188,7 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException(
                 "Unknown add-on provider '" + rProviderId + "': check providerId against the Clever Cloud "
-                    + "console or " + PROVIDERS_CATALOG_FALLBACK_URL
+                    + "console or " + providersCatalogFallbackUrl()
             ));
         var plans = provider.getPlans() != null ? provider.getPlans() : List.<AddonProvider.Plan>of();
 
@@ -213,15 +221,40 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
             }
         } catch (Exception e) {
             runContext.logger().debug("Add-on provider catalog not reachable via {}: {}, falling back to {}",
-                baseUrl(), e.getMessage(), PROVIDERS_CATALOG_FALLBACK_URL);
+                baseUrl(), e.getMessage(), providersCatalogFallbackUrl());
         }
 
+        return List.of(MAPPER.readValue(fetchFallbackCatalog(runContext), AddonProvider[].class));
+    }
+
+    /**
+     * Fetches the public catalog directly, bypassing the plugin's configured base URL. Scrubs the
+     * response body from any non-2xx failure, same as {@link AbstractCleverCloudConnection#makeCall}
+     * does for the primary path, so a fallback error can never leak a raw response body.
+     */
+    private String fetchFallbackCatalog(RunContext runContext) throws Exception {
+        var logger = runContext.logger();
         try (var client = new HttpClient(runContext, getOptions())) {
             var response = client.request(
-                HttpRequest.builder().uri(URI.create(PROVIDERS_CATALOG_FALLBACK_URL)).method("GET").build(),
+                HttpRequest.builder().uri(URI.create(providersCatalogFallbackUrl())).method("GET").build(),
                 String.class
             );
-            return List.of(MAPPER.readValue(response.getBody(), AddonProvider[].class));
+            return response.getBody();
+        } catch (HttpClientResponseException e) {
+            var status = e.getResponse() != null ? e.getResponse().getStatus().getCode() : -1;
+            var method = "request";
+            var uri = "";
+            if (e.getResponse() != null && e.getResponse().getRequest() != null) {
+                method = e.getResponse().getRequest().getMethod();
+                uri = String.valueOf(e.getResponse().getRequest().getUri());
+            }
+            logger.debug("Add-on provider catalog fallback {} {} returned {}", method, uri, status);
+            throw new HttpClientResponseException(
+                "Add-on provider catalog fallback error " + status + " on " + method + " " + uri
+                    + ": the public catalog endpoint is unreachable or returned an error",
+                e.getResponse(),
+                e
+            );
         }
     }
 
