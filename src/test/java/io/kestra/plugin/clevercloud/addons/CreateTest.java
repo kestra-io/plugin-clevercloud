@@ -24,6 +24,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class CreateTest extends AbstractClevercloudTest {
 
+    private static final String PROVIDERS_CATALOG_JSON = """
+        [
+          {
+            "id": "azimutt",
+            "plans": [
+              {"id": "plan_free-0001", "slug": "free", "name": "Free", "price": 0.0},
+              {"id": "plan_solo-0001", "slug": "solo", "name": "Solo", "price": 9.0},
+              {"id": "plan_team-0001", "slug": "team", "name": "Team", "price": 42.0}
+            ]
+          }
+        ]
+        """;
+
     @Test
     void provisionsAddonWithAllFields(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(post(urlPathEqualTo("/organisations/orga_test/addons"))
@@ -44,7 +57,7 @@ class CreateTest extends AbstractClevercloudTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .providerId(Property.ofValue("postgresql-addon"))
-            .plan(Property.ofValue("dev"))
+            .plan(Property.ofValue("plan_dev"))
             .region(Property.ofValue("par"))
             .name(Property.ofValue("my-postgres"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
@@ -60,7 +73,7 @@ class CreateTest extends AbstractClevercloudTest {
 
         verify(postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons"))
             .withRequestBody(containing("\"providerId\":\"postgresql-addon\""))
-            .withRequestBody(containing("\"plan\":\"dev\""))
+            .withRequestBody(containing("\"plan\":\"plan_dev\""))
             .withRequestBody(containing("\"region\":\"par\""))
             .withRequestBody(containing("\"name\":\"my-postgres\"")));
     }
@@ -75,7 +88,7 @@ class CreateTest extends AbstractClevercloudTest {
             .type(Create.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .providerId(Property.ofValue("redis-addon"))
-            .plan(Property.ofValue("s"))
+            .plan(Property.ofValue("plan_s"))
             .region(Property.ofValue("rbx"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
@@ -85,7 +98,7 @@ class CreateTest extends AbstractClevercloudTest {
         assertThat(output.getId(), is("addon_new-0002"));
         verify(postRequestedFor(urlPathEqualTo("/self/addons"))
             .withRequestBody(containing("\"providerId\":\"redis-addon\""))
-            .withRequestBody(containing("\"plan\":\"s\""))
+            .withRequestBody(containing("\"plan\":\"plan_s\""))
             .withRequestBody(containing("\"region\":\"rbx\"")));
     }
 
@@ -100,7 +113,7 @@ class CreateTest extends AbstractClevercloudTest {
             .apiToken(Property.ofValue("my-secret-token"))
             .organisationId(Property.ofValue("orga_test"))
             .providerId(Property.ofValue("postgresql-addon"))
-            .plan(Property.ofValue("dev"))
+            .plan(Property.ofValue("plan_dev"))
             .region(Property.ofValue("par"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
@@ -117,7 +130,7 @@ class CreateTest extends AbstractClevercloudTest {
             .type(Create.class.getName())
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
-            .plan(Property.ofValue("dev"))
+            .plan(Property.ofValue("plan_dev"))
             .region(Property.ofValue("par"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
@@ -128,23 +141,6 @@ class CreateTest extends AbstractClevercloudTest {
     }
 
     @Test
-    void throwsClearExceptionWhenPlanMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
-        var task = TestableCreate.builder()
-            .id("create-addon-missing-plan-test")
-            .type(Create.class.getName())
-            .apiToken(Property.ofValue("test-api-token"))
-            .organisationId(Property.ofValue("orga_test"))
-            .providerId(Property.ofValue("postgresql-addon"))
-            .region(Property.ofValue("par"))
-            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
-            .build();
-
-        var runContext = runContext();
-        var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
-        assertThat(ex.getMessage(), containsString("plan is required"));
-    }
-
-    @Test
     void throwsClearExceptionWhenRegionMissing(WireMockRuntimeInfo wireMockRuntimeInfo) {
         var task = TestableCreate.builder()
             .id("create-addon-missing-region-test")
@@ -152,13 +148,106 @@ class CreateTest extends AbstractClevercloudTest {
             .apiToken(Property.ofValue("test-api-token"))
             .organisationId(Property.ofValue("orga_test"))
             .providerId(Property.ofValue("postgresql-addon"))
-            .plan(Property.ofValue("dev"))
+            .plan(Property.ofValue("plan_dev"))
             .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
             .build();
 
         var runContext = runContext();
         var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
         assertThat(ex.getMessage(), containsString("region is required"));
+    }
+
+    @Test
+    void resolvesPlanSlugToIdViaCatalog(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubGetJson("/products/addonproviders", PROVIDERS_CATALOG_JSON);
+        stubFor(post(urlPathEqualTo("/organisations/orga_test/addons"))
+            .willReturn(okJson("{\"id\": \"addon_new-0003\"}")));
+
+        var task = TestableCreate.builder()
+            .id("create-addon-slug-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .providerId(Property.ofValue("azimutt"))
+            .plan(Property.ofValue("free"))
+            .region(Property.ofValue("par"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        task.run(runContext());
+
+        verify(postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons"))
+            .withRequestBody(containing("\"plan\":\"plan_free-0001\"")));
+    }
+
+    @Test
+    void passesRawPlanIdThroughWithoutCatalogLookup(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(post(urlPathEqualTo("/organisations/orga_test/addons"))
+            .willReturn(okJson("{\"id\": \"addon_new-0004\"}")));
+
+        var task = TestableCreate.builder()
+            .id("create-addon-raw-id-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .providerId(Property.ofValue("azimutt"))
+            .plan(Property.ofValue("plan_abcdef01-2345-6789-abcd-ef0123456789"))
+            .region(Property.ofValue("par"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        task.run(runContext());
+
+        verifyNeverCalled("/products/addonproviders");
+        verify(postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons"))
+            .withRequestBody(containing("\"plan\":\"plan_abcdef01-2345-6789-abcd-ef0123456789\"")));
+    }
+
+    @Test
+    void defaultsToCheapestPlanWhenOmitted(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubGetJson("/products/addonproviders", PROVIDERS_CATALOG_JSON);
+        stubFor(post(urlPathEqualTo("/organisations/orga_test/addons"))
+            .willReturn(okJson("{\"id\": \"addon_new-0005\"}")));
+
+        var task = TestableCreate.builder()
+            .id("create-addon-cheapest-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .providerId(Property.ofValue("azimutt"))
+            .region(Property.ofValue("par"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        task.run(runContext());
+
+        verify(postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons"))
+            .withRequestBody(containing("\"plan\":\"plan_free-0001\"")));
+    }
+
+    @Test
+    void throwsClearExceptionForUnknownPlanSlug(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubGetJson("/products/addonproviders", PROVIDERS_CATALOG_JSON);
+
+        var task = TestableCreate.builder()
+            .id("create-addon-unknown-slug-test")
+            .type(Create.class.getName())
+            .apiToken(Property.ofValue("test-api-token"))
+            .organisationId(Property.ofValue("orga_test"))
+            .providerId(Property.ofValue("azimutt"))
+            .plan(Property.ofValue("bogus-plan"))
+            .region(Property.ofValue("par"))
+            .testBaseUrl(wireMockRuntimeInfo.getHttpBaseUrl())
+            .build();
+
+        var runContext = runContext();
+        var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext));
+        assertThat(ex.getMessage(), containsString("Unknown plan 'bogus-plan'"));
+        assertThat(ex.getMessage(), containsString("free"));
+        assertThat(ex.getMessage(), containsString("solo"));
+        assertThat(ex.getMessage(), containsString("team"));
+
+        verify(0, postRequestedFor(urlPathEqualTo("/organisations/orga_test/addons")));
     }
 
     @SuperBuilder
