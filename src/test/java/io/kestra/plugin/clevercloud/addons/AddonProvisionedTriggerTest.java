@@ -6,6 +6,7 @@ import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.core.runners.RunContextInitializer;
@@ -249,6 +250,30 @@ class AddonProvisionedTriggerTest extends AbstractClevercloudTest {
     @Getter
     @NoArgsConstructor
     public static class TestableTrigger extends AddonProvisionedTrigger {
+
+        private String testBaseUrl;
+
+        @Override
+        protected io.kestra.plugin.clevercloud.addons.List buildListTask() {
+            return TestableList.builder()
+                .id(this.id)
+                .type(io.kestra.plugin.clevercloud.addons.List.class.getName())
+                .apiToken(getApiToken())
+                .organisationId(getOrganisationId())
+                .options(getOptions())
+                .fetchType(Property.ofValue(FetchType.FETCH))
+                .testBaseUrl(testBaseUrl)
+                .build();
+        }
+    }
+
+    // Mirrors ListTest.TestableList: routes the delegate List task's baseUrl() at WireMock.
+    @SuperBuilder
+    @ToString
+    @EqualsAndHashCode
+    @Getter
+    @NoArgsConstructor
+    public static class TestableList extends io.kestra.plugin.clevercloud.addons.List {
 
         private String testBaseUrl;
 

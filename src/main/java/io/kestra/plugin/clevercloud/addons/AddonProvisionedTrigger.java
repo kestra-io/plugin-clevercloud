@@ -1,7 +1,6 @@
 package io.kestra.plugin.clevercloud.addons;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.configurations.HttpConfiguration;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -9,6 +8,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.models.triggers.PollingTriggerInterface;
 import io.kestra.core.models.triggers.TriggerContext;
@@ -28,9 +28,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-import java.net.URI;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -92,10 +90,6 @@ public class AddonProvisionedTrigger extends AbstractTrigger
     @PluginProperty(group = "advanced")
     HttpConfiguration options;
 
-    protected String baseUrl() {
-        return AbstractCleverCloudConnection.DEFAULT_BASE_URL;
-    }
-
     @Schema(
         title = "Organisation ID",
         description = "When omitted, the personal account endpoint (/self) is used instead."
@@ -121,22 +115,12 @@ public class AddonProvisionedTrigger extends AbstractTrigger
         var runContext = conditionContext.getRunContext();
         var logger = runContext.logger();
 
-        var rApiToken = runContext.render(apiToken).as(String.class).orElseThrow(
-            () -> new IllegalArgumentException("apiToken is required")
-        );
         var rOrgId = runContext.render(organisationId).as(String.class).orElse(null);
-
-        var url = AbstractCleverCloudConnection.resourceUrl(baseUrl(), rOrgId, "addons");
 
         logger.debug("Polling add-ons for {}", rOrgId != null ? "organisation " + rOrgId : "personal account");
 
-        var requestBuilder = HttpRequest.builder()
-            .uri(URI.create(url))
-            .method("GET");
-        var body = AbstractCleverCloudConnection.makeCall(runContext, options, requestBuilder, rApiToken, String.class);
-
-        var addons = AbstractCleverCloudConnection.MAPPER.readValue(
-            body != null ? body : "[]", new TypeReference<ArrayList<Addon>>() {});
+        var listOutput = buildListTask().run(runContext);
+        var addons = listOutput.getAddons() != null ? listOutput.getAddons() : List.<Addon>of();
 
         var currentIds = addons.stream()
             .filter(a -> a.getId() != null)
@@ -191,6 +175,22 @@ public class AddonProvisionedTrigger extends AbstractTrigger
             .build();
 
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
+    }
+
+    /**
+     * Builds the delegate {@link io.kestra.plugin.clevercloud.addons.List} task that performs the actual
+     * add-on fetch, so both entry points share one HTTP implementation instead of duplicating it here.
+     * Overridden in tests to route the delegate at a WireMock base URL.
+     */
+    protected io.kestra.plugin.clevercloud.addons.List buildListTask() {
+        return io.kestra.plugin.clevercloud.addons.List.builder()
+            .id(this.id)
+            .type(io.kestra.plugin.clevercloud.addons.List.class.getName())
+            .apiToken(apiToken)
+            .organisationId(organisationId)
+            .options(options)
+            .fetchType(Property.ofValue(FetchType.FETCH))
+            .build();
     }
 
     private static void persistIds(KVStore kv, String kvKey, Set<String> ids, Duration ttl) throws Exception {
