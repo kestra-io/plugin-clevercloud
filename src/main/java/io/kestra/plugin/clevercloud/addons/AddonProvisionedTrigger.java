@@ -101,7 +101,7 @@ public class AddonProvisionedTrigger extends AbstractTrigger
         title = "How often to check for new add-ons",
         description = "ISO-8601 duration. Minimum PT30S is recommended to avoid overloading the API. Defaults to PT1M."
     )
-    @PluginProperty(group = "reliability")
+    @PluginProperty(group = "execution")
     @Builder.Default
     private Duration interval = Duration.ofMinutes(1);
 

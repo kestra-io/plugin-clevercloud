@@ -116,7 +116,7 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
         title = "Add-on version",
         description = "Version identifier of the underlying service, e.g. a PostgreSQL major version. When omitted, the provider's default version is used."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "execution")
     private Property<String> addonVersion;
 
     private static final String PLAN_ID_PREFIX = "plan_";
