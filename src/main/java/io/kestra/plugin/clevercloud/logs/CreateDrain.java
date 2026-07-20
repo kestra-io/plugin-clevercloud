@@ -96,6 +96,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         description = "Only used when drainType is RAW_HTTP or ELASTICSEARCH."
     )
     @PluginProperty(group = "connection", secret = true)
+    @ToString.Exclude
     private Property<String> password;
 
     @Schema(
@@ -110,6 +111,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         description = "Only used when drainType is NEWRELIC."
     )
     @PluginProperty(group = "connection", secret = true)
+    @ToString.Exclude
     private Property<String> apiKey;
 
     @Schema(

@@ -23,6 +23,15 @@ class StreamTest extends AbstractClevercloudTest {
 
         """;
 
+    // WireMock's chunked dribble delay sleeps totalDuration/numberOfChunks before writing each
+    // chunk, including the first, and splits the raw body bytes at fixed offsets. A comment line
+    // (SSE-legal, ignored by parsers) padded far larger than SSE_BODY guarantees both complete
+    // events land inside that first byte chunk, so it arrives after a single ~1s delay while the
+    // remaining 14 chunks keep the connection open for another ~14s, well past this test's bound.
+    private static final String OPEN_CONNECTION_BODY = SSE_BODY + ":" + "x".repeat(30_000) + "\n\n";
+    private static final int DRIBBLE_CHUNKS = 15;
+    private static final int DRIBBLE_TOTAL_MILLIS = 15_000;
+
     private TestableStream.TestableStreamBuilder<?, ?> baseBuilder(String baseUrl) {
         return TestableStream.builder()
             .id("stream-test-" + System.nanoTime())
@@ -67,7 +76,7 @@ class StreamTest extends AbstractClevercloudTest {
 
     // Reproduces the reported hang: the server accepts the request, sends a 200 SSE response and
     // then never closes the connection (a genuine live tail). Without client-side enforcement of
-    // duration, this would block forever; the fix must force-close and return within duration.
+    // duration, this would block forever. The fix must force-close and return within duration.
     @Test
     void neverClosingStreamStillReturnsWithinDuration(WireMockRuntimeInfo wireMockRuntimeInfo) {
         stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
@@ -83,6 +92,30 @@ class StreamTest extends AbstractClevercloudTest {
         assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
             var output = task.run(runContext());
             assertThat(output.getTotal(), greaterThanOrEqualTo(0));
+        });
+    }
+
+    // Proves the SseStopSignal sentinel path: the connection stays OPEN (only 1 of 15 dribble
+    // chunks has been sent) but the limit is satisfied by the first event, so the task must return
+    // within a couple of seconds, well before duration (which also drives idleTimeout here) would
+    // ever kick in.
+    @Test
+    void limitReachedMidStreamReturnsEarly(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withChunkedDribbleDelay(DRIBBLE_CHUNKS, DRIBBLE_TOTAL_MILLIS)
+                .withBody(OPEN_CONNECTION_BODY)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .duration(Property.ofValue(Duration.ofSeconds(20)))
+            .limit(Property.ofValue(1))
+            .build();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
+            var output = task.run(runContext());
+            assertThat(output.getTotal(), is(1));
+            assertThat(output.getLogs().getFirst().getId(), is("log_1"));
         });
     }
 

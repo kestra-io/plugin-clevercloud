@@ -75,6 +75,6 @@ public class DeleteDrain extends AbstractLogsConnection implements RunnableTask<
         logger.info("Deleting log drain {} for application {}", rDrainId, rAppId);
         makeCall(runContext, buildDeleteRequest(url));
 
-        return new VoidOutput();
+        return null;
     }
 }

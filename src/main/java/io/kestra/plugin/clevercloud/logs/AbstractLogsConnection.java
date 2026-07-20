@@ -54,12 +54,12 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
         description = "The Clever Cloud organisation or personal account ID that owns the application (orga_xxx or user_xxx). " +
             "Unlike the rest of this plugin, the v4 logs and log drain APIs have no /self shortcut, so this is always required."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "main")
     private Property<String> organisationId;
 
     @NotNull
     @Schema(title = "Application ID")
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "main")
     private Property<String> applicationId;
 
     /**
@@ -160,6 +160,17 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 var reachedLimit = entries.size() >= limit;
                 var reachedUntil = until != null && entry.getDate() != null && !entry.getDate().isBefore(until);
                 if (reachedLimit || reachedUntil) {
+                    // Apache's classic HttpClient quietly drains the rest of the response body before
+                    // letting a handler exception propagate, so it can return the connection to the
+                    // pool for reuse. On a connection that is still open and slowly trickling data,
+                    // that drain would block for as long as the server keeps sending, defeating the
+                    // whole point of stopping here. Force-closing first, exactly like the watchdog
+                    // does, makes that drain hit an already-closed connection and return immediately.
+                    try {
+                        client.close();
+                    } catch (IOException e) {
+                        logger.debug("Failed to close SSE connection after reaching limit/until: {}", e.getMessage());
+                    }
                     throw new SseStopSignal();
                 }
             }));
@@ -214,6 +225,9 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
         } finally {
             executor.shutdownNow();
             watchdog.shutdownNow();
+            if (!executor.awaitTermination(SAFETY_MARGIN.toMillis(), TimeUnit.MILLISECONDS)) {
+                logger.warn("Clever Cloud logs SSE worker thread did not terminate within {} after shutdown", SAFETY_MARGIN);
+            }
         }
 
         synchronized (entries) {

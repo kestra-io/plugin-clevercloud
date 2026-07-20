@@ -30,6 +30,15 @@ class FetchTest extends AbstractClevercloudTest {
 
         """;
 
+    // WireMock's chunked dribble delay sleeps totalDuration/numberOfChunks before writing each
+    // chunk, including the first, and splits the raw body bytes at fixed offsets. A comment line
+    // (SSE-legal, ignored by parsers) padded far larger than SSE_BODY guarantees both complete
+    // events land inside that first byte chunk, so it arrives after a single ~1s delay while the
+    // remaining 14 chunks keep the connection open for another ~14s, well past this test's bound.
+    private static final String OPEN_CONNECTION_BODY = SSE_BODY + ":" + "x".repeat(30_000) + "\n\n";
+    private static final int DRIBBLE_CHUNKS = 15;
+    private static final int DRIBBLE_TOTAL_MILLIS = 15_000;
+
     private TestableFetch.TestableFetchBuilder<?, ?> baseBuilder(String baseUrl) {
         return TestableFetch.builder()
             .id("fetch-test-" + System.nanoTime())
@@ -167,7 +176,7 @@ class FetchTest extends AbstractClevercloudTest {
 
     // Reproduces the reported hang: the server accepts the request, sends a 200 SSE response and
     // then never closes the connection (a live tail or an idling proxy). Without a client-side stop
-    // mechanism, this would block forever; the fix must return within maxDuration regardless.
+    // mechanism, this would block forever. The fix must return within maxDuration regardless.
     @Test
     void neverClosingStreamStillReturnsWithinMaxDuration(WireMockRuntimeInfo wireMockRuntimeInfo) {
         stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
@@ -184,6 +193,55 @@ class FetchTest extends AbstractClevercloudTest {
         assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
             var output = task.run(runContext());
             assertThat(output.getTotal(), greaterThanOrEqualTo(0));
+        });
+    }
+
+    // Proves the SseStopSignal sentinel path: the connection stays OPEN (only 1 of 15 dribble
+    // chunks has been sent) but the limit is satisfied by the first event, so the task must return
+    // within a couple of seconds, well before idleTimeout or maxDuration would ever kick in.
+    @Test
+    void limitReachedMidStreamReturnsEarly(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withChunkedDribbleDelay(DRIBBLE_CHUNKS, DRIBBLE_TOTAL_MILLIS)
+                .withBody(OPEN_CONNECTION_BODY)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .limit(Property.ofValue(1))
+            .maxDuration(Property.ofValue(Duration.ofSeconds(20)))
+            .idleTimeout(Property.ofValue(Duration.ofSeconds(15)))
+            .build();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
+            var output = task.run(runContext());
+            assertThat(output.getTotal(), is(1));
+            assertThat(output.getLogs().getFirst().getId(), is("log_1"));
+        });
+    }
+
+    // Same open-connection setup, but this time the limit is never reached (a generous limit) and
+    // instead "until" is satisfied by the first event's own date, exercising the other branch of
+    // the SseStopSignal sentinel.
+    @Test
+    void untilReachedMidStreamReturnsEarly(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withChunkedDribbleDelay(DRIBBLE_CHUNKS, DRIBBLE_TOTAL_MILLIS)
+                .withBody(OPEN_CONNECTION_BODY)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .until(Property.ofValue(Instant.parse("2024-01-01T10:00:00Z")))
+            .limit(Property.ofValue(10000))
+            .maxDuration(Property.ofValue(Duration.ofSeconds(20)))
+            .idleTimeout(Property.ofValue(Duration.ofSeconds(15)))
+            .build();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
+            var output = task.run(runContext());
+            assertThat(output.getTotal(), is(1));
+            assertThat(output.getLogs().getFirst().getId(), is("log_1"));
         });
     }
 

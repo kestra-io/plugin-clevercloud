@@ -19,6 +19,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.List;
 
 @SuperBuilder
 @ToString
@@ -97,7 +98,7 @@ public class ListDrains extends AbstractLogsConnection implements RunnableTask<L
     public static class Output implements io.kestra.core.models.tasks.Output {
 
         @Schema(title = "List of log drains", description = "Populated when fetchType is FETCH.")
-        private final java.util.List<Drain> drains;
+        private final List<Drain> drains;
 
         @Schema(title = "First log drain returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no drain was found.")
         private final Drain drain;
