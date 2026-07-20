@@ -34,10 +34,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Shared base for the logs and log drain tasks/triggers, all of which hit Clever Cloud APIv4
- * (as opposed to the rest of this plugin, which targets APIv2). Unlike the v2 endpoints, the v4
- * logs and drains endpoints have no /self fallback: organisationId is always required, even for
- * personal accounts (pass the personal account's user_xxx id as organisationId in that case).
+ * Shared base for the logs and log drain tasks/triggers, targeting Clever Cloud APIv4.
+ * Unlike v2, there is no /self fallback: organisationId is always required, even for personal accounts.
  */
 @SuperBuilder
 @ToString
@@ -62,10 +60,7 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
     @PluginProperty(group = "main")
     private Property<String> applicationId;
 
-    /**
-     * Default hard cap and idle cutoff shared by callers of {@link #fetchLogs} that do not expose
-     * their own maxDuration/idleTimeout properties (currently {@link LogPatternTrigger}).
-     */
+    // Fixed bounds for callers of fetchLogs without their own maxDuration/idleTimeout properties (LogPatternTrigger).
     protected static final Duration DEFAULT_MAX_DURATION = Duration.ofSeconds(30);
     protected static final Duration DEFAULT_IDLE_TIMEOUT = Duration.ofSeconds(10);
 
@@ -86,11 +81,7 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
             + "/applications/" + encodeSegment(applicationId) + "/drains");
     }
 
-    /**
-     * Appends query parameters in insertion order, skipping null values. Mirrors
-     * AbstractCleverCloudConnection#instancesUrl, kept local to this package since it is only
-     * needed here.
-     */
+    // Appends query params in insertion order, skipping nulls, mirroring AbstractCleverCloudConnection#instancesUrl.
     protected static String appendQuery(String url, Map<String, String> params) {
         var sb = new StringBuilder(url);
         var separator = "?";
@@ -105,18 +96,8 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
     }
 
     /**
-     * Consumes the Clever Cloud v4 logs SSE endpoint and returns whatever entries were collected.
-     * This must never rely on the server closing the connection: a live tail can idle forever and a
-     * bounded historical fetch can be served by a proxy that keeps the socket open past "until". So
-     * the read runs on a bounded worker thread and a watchdog forcibly closes the underlying
-     * HttpClient (unblocking the read with an IOException) as soon as any of the following happens,
-     * whichever comes first: limit reached, an event's date is at/after "until" (both signalled by
-     * the event callback throwing the private SseStopSignal), the hard maxDuration deadline elapses,
-     * or idleTimeout passes with no new event. A real server-side close (the historical, well-behaved
-     * case) still short-circuits all of the above. Non-2xx responses are checked manually because
-     * HttpClient#sseRequest does not enforce allowed status codes the way #request does; a non-2xx
-     * response is expected to complete quickly on its own since the server has nothing left to stream,
-     * so it is always observed before the watchdog ever needs to step in.
+     * Consumes the Clever Cloud v4 logs SSE endpoint. Never relies on the server closing the connection:
+     * a watchdog force-closes it on limit/until/maxDuration/idleTimeout, whichever comes first.
      */
     protected static List<LogEntry> fetchLogs(
         RunContext runContext,
@@ -160,12 +141,7 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 var reachedLimit = entries.size() >= limit;
                 var reachedUntil = until != null && entry.getDate() != null && !entry.getDate().isBefore(until);
                 if (reachedLimit || reachedUntil) {
-                    // Apache's classic HttpClient quietly drains the rest of the response body before
-                    // letting a handler exception propagate, so it can return the connection to the
-                    // pool for reuse. On a connection that is still open and slowly trickling data,
-                    // that drain would block for as long as the server keeps sending, defeating the
-                    // whole point of stopping here. Force-closing first, exactly like the watchdog
-                    // does, makes that drain hit an already-closed connection and return immediately.
+                    // Close before throwing so Apache's client hits an already-closed connection instead of draining the open stream first.
                     try {
                         client.close();
                     } catch (IOException e) {
@@ -183,8 +159,7 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                     return;
                 }
                 if (timedOut.compareAndSet(false, true)) {
-                    // Force-closes the client to unblock the worker thread stuck in sseRequest.
-                    // The try-with-resources close on the normal exit path is then a harmless no-op.
+                    // Unblocks the worker thread stuck in sseRequest; the later try-with-resources close is then a no-op.
                     try {
                         client.close();
                     } catch (IOException e) {
@@ -217,8 +192,7 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 client.close();
             }
 
-            // The v4 logs SSE endpoint never closes on its own for a live tail or an idle-open historical
-            // fetch, so hitting the client-side limit is the normal, every-run path, not a warning.
+            // Hitting the client-side limit is the normal path here, not a warning: the server rarely closes on its own.
             if (timedOut.get()) {
                 logger.debug("Stopped logs SSE after client-side limit, collected {} entries", entries.size());
             }
@@ -235,11 +209,7 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
         }
     }
 
-    /**
-     * Thrown from the SSE event callback to unwind out of HttpClient#sseRequest as soon as limit or
-     * until is reached, without waiting for the server to close the connection. Caught in fetchLogs
-     * and treated as normal completion, not a failure. No stack trace: used purely for control flow.
-     */
+    // Unwinds out of sseRequest once limit/until is reached; caught in fetchLogs as normal completion, not a failure.
     private static final class SseStopSignal extends RuntimeException {
         private SseStopSignal() {
             super(null, null, false, false);

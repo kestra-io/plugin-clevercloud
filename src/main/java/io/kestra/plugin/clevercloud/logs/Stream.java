@@ -117,8 +117,7 @@ public class Stream extends AbstractLogsConnection implements RunnableTask<Strea
         );
 
         logger.info("Streaming logs for application {} for {}", rAppId, rDuration);
-        // idleTimeout is set to the same value as the hard deadline: a quiet live tail is expected
-        // behavior here, unlike Fetch, so silence alone must never end the stream early.
+        // idleTimeout equals the hard deadline: unlike Fetch, silence alone must never end a live tail early.
         var entries = fetchLogs(runContext, getOptions(), url, rApiToken, rLimit, until, rDuration, rDuration);
         logger.info("Collected {} live log line(s)", entries.size());
 
