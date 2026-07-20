@@ -28,7 +28,7 @@ class CreateDrainTest extends AbstractClevercloudTest {
     void createsDatadogDrain(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(post(urlPathEqualTo("/drains/organisations/orga_test/applications/app_test/drains"))
             .willReturn(okJson("""
-                {"id": "drain_new", "kind": "LOG", "status": "CREATED"}
+                {"id": "drain_new", "kind": "LOG", "status": {"date": "2024-01-01T00:00:00Z", "status": "CREATED", "authorId": "user_test"}}
                 """)));
 
         var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
@@ -52,7 +52,7 @@ class CreateDrainTest extends AbstractClevercloudTest {
     void includesElasticsearchCredentialsAndIndexInBody(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(post(urlPathEqualTo("/drains/organisations/orga_test/applications/app_test/drains"))
             .willReturn(okJson("""
-                {"id": "drain_es", "kind": "LOG", "status": "CREATED"}
+                {"id": "drain_es", "kind": "LOG", "status": {"date": "2024-01-01T00:00:00Z", "status": "CREATED", "authorId": "user_test"}}
                 """)));
 
         var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
@@ -74,7 +74,7 @@ class CreateDrainTest extends AbstractClevercloudTest {
     void omitsUnrelatedFieldsForDatadog(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         stubFor(post(urlPathEqualTo("/drains/organisations/orga_test/applications/app_test/drains"))
             .willReturn(okJson("""
-                {"id": "drain_new", "kind": "LOG", "status": "CREATED"}
+                {"id": "drain_new", "kind": "LOG", "status": {"date": "2024-01-01T00:00:00Z", "status": "CREATED", "authorId": "user_test"}}
                 """)));
 
         var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())

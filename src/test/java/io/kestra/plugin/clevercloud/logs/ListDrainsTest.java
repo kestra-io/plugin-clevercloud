@@ -33,7 +33,7 @@ class ListDrainsTest extends AbstractClevercloudTest {
                     "id": "drain_1",
                     "applicationId": "app_test",
                     "kind": "LOG",
-                    "status": "ENABLED",
+                    "status": {"date": "2024-01-01T00:00:00Z", "status": "ENABLED", "authorId": "user_test"},
                     "recipient": {"type": "DATADOG", "url": "https://http-intake.logs.datadoghq.com/api/v2/logs"}
                   }
                 ]
@@ -45,7 +45,7 @@ class ListDrainsTest extends AbstractClevercloudTest {
         assertThat(output.getTotal(), is(1));
         assertThat(output.getDrains(), hasSize(1));
         assertThat(output.getDrains().getFirst().getId(), is("drain_1"));
-        assertThat(output.getDrains().getFirst().getStatus(), is("ENABLED"));
+        assertThat(output.getDrains().getFirst().getStatus().getState(), is("ENABLED"));
         assertThat(output.getDrains().getFirst().getRecipient().getType(), is("DATADOG"));
     }
 
@@ -66,8 +66,8 @@ class ListDrainsTest extends AbstractClevercloudTest {
         stubFor(get(urlPathEqualTo("/drains/organisations/orga_test/applications/app_test/drains"))
             .willReturn(okJson("""
                 [
-                  {"id": "drain_a", "kind": "LOG", "status": "ENABLED"},
-                  {"id": "drain_b", "kind": "ACCESSLOG", "status": "CREATED"}
+                  {"id": "drain_a", "kind": "LOG", "status": {"date": "2024-01-01T00:00:00Z", "status": "ENABLED", "authorId": "user_test"}},
+                  {"id": "drain_b", "kind": "ACCESSLOG", "status": {"date": "2024-01-02T00:00:00Z", "status": "CREATED", "authorId": "user_test"}}
                 ]
                 """)));
 

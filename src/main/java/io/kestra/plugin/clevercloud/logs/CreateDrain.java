@@ -173,7 +173,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         return Output.builder()
             .id(drain.getId())
             .kind(drain.getKind())
-            .status(drain.getStatus())
+            .status(drain.getStatus() != null ? drain.getStatus().getState() : null)
             .build();
     }
 
@@ -187,7 +187,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         @Schema(title = "Which log stream the drain forwards")
         private final String kind;
 
-        @Schema(title = "Drain status returned by the API", description = "e.g. CREATED, ENABLING, ENABLED.")
+        @Schema(title = "Drain status returned by the API", description = "One of CREATED, ENABLING, ENABLED, DISABLING, DISABLED, DELETED, extracted from the nested status object the API returns.")
         private final String status;
     }
 }
