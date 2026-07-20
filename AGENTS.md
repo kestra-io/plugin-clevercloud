@@ -27,6 +27,7 @@ Source packages under `io.kestra.plugin`:
 - `clevercloud.deployments` (deployment tasks and trigger)
 - `clevercloud.organisations` (organisation and member management tasks and trigger)
 - `clevercloud.addons` (add-on provisioning, inspection, application linking tasks and trigger)
+- `clevercloud.logs` (application log fetch/stream, log drain management, and log pattern trigger, backed by APIv4)
 
 Infrastructure dependencies (Docker Compose services):
 
@@ -62,6 +63,13 @@ Infrastructure dependencies (Docker Compose services):
 - `io.kestra.plugin.clevercloud.addons.UnlinkFromApplication` - detach an add-on from an application via `DELETE .../applications/{appId}/addons/{addonId}`
 - `io.kestra.plugin.clevercloud.addons.Delete` - delete an add-on via `DELETE .../addons/{addonId}`
 - `io.kestra.plugin.clevercloud.addons.AddonProvisionedTrigger` - polling trigger that fires when a new add-on appears in the add-on list
+- `io.kestra.plugin.clevercloud.logs.AbstractLogsConnection` - shared base for the logs package; owns `organisationId`/`applicationId` (both required, no `/self` fallback), v4 base URL, and the SSE-based `fetchLogs` helper, which enforces a client-side maxDuration/idleTimeout so it never depends on the server closing the connection
+- `io.kestra.plugin.clevercloud.logs.Fetch` - fetch application runtime logs in a bounded time window via the v4 logs SSE endpoint, bounded client-side by `maxDuration` (default PT30S) and `idleTimeout` (default PT10S), supports `fetchType`
+- `io.kestra.plugin.clevercloud.logs.Stream` - consume live application logs for a bounded duration (defaults to PT1M, capped at PT15M) via the same v4 logs SSE endpoint, `duration` is enforced client-side so it always terminates even if the server never closes the connection
+- `io.kestra.plugin.clevercloud.logs.ListDrains` - list log drains configured for an application, supports `fetchType`
+- `io.kestra.plugin.clevercloud.logs.CreateDrain` - create a log drain (RAW_HTTP, SYSLOG_TCP, SYSLOG_UDP, DATADOG, ELASTICSEARCH, NEWRELIC)
+- `io.kestra.plugin.clevercloud.logs.DeleteDrain` - delete a log drain by ID
+- `io.kestra.plugin.clevercloud.logs.LogPatternTrigger` - polling trigger that fires when a log line matches a regex pattern
 
 ### Project Structure
 
@@ -105,19 +113,33 @@ plugin-clevercloud/
 │   │   ├── AddMember.java
 │   │   ├── RemoveMember.java
 │   │   └── MemberChangeTrigger.java
-│   └── addons/
+│   ├── addons/
+│   │   ├── package-info.java
+│   │   ├── model/
+│   │   │   ├── Addon.java
+│   │   │   └── EnvironmentVariable.java
+│   │   ├── List.java
+│   │   ├── Get.java
+│   │   ├── Create.java
+│   │   ├── GetEnv.java
+│   │   ├── LinkToApplication.java
+│   │   ├── UnlinkFromApplication.java
+│   │   ├── Delete.java
+│   │   └── AddonProvisionedTrigger.java
+│   └── logs/
 │       ├── package-info.java
 │       ├── model/
-│       │   ├── Addon.java
-│       │   └── EnvironmentVariable.java
-│       ├── List.java
-│       ├── Get.java
-│       ├── Create.java
-│       ├── GetEnv.java
-│       ├── LinkToApplication.java
-│       ├── UnlinkFromApplication.java
-│       ├── Delete.java
-│       └── AddonProvisionedTrigger.java
+│       │   ├── LogEntry.java
+│       │   ├── Drain.java
+│       │   ├── DrainType.java
+│       │   └── DrainKind.java
+│       ├── AbstractLogsConnection.java
+│       ├── Fetch.java
+│       ├── Stream.java
+│       ├── ListDrains.java
+│       ├── CreateDrain.java
+│       ├── DeleteDrain.java
+│       └── LogPatternTrigger.java
 ├── src/test/java/io/kestra/plugin/clevercloud/
 │   ├── AbstractClevercloudTest.java
 │   ├── applications/
@@ -142,15 +164,22 @@ plugin-clevercloud/
 │   │   ├── AddMemberTest.java
 │   │   ├── RemoveMemberTest.java
 │   │   └── MemberChangeTriggerTest.java
-│   └── addons/
-│       ├── ListTest.java
-│       ├── GetTest.java
-│       ├── CreateTest.java
-│       ├── GetEnvTest.java
-│       ├── LinkToApplicationTest.java
-│       ├── UnlinkFromApplicationTest.java
-│       ├── DeleteTest.java
-│       └── AddonProvisionedTriggerTest.java
+│   ├── addons/
+│   │   ├── ListTest.java
+│   │   ├── GetTest.java
+│   │   ├── CreateTest.java
+│   │   ├── GetEnvTest.java
+│   │   ├── LinkToApplicationTest.java
+│   │   ├── UnlinkFromApplicationTest.java
+│   │   ├── DeleteTest.java
+│   │   └── AddonProvisionedTriggerTest.java
+│   └── logs/
+│       ├── FetchTest.java
+│       ├── StreamTest.java
+│       ├── ListDrainsTest.java
+│       ├── CreateDrainTest.java
+│       ├── DeleteDrainTest.java
+│       └── LogPatternTriggerTest.java
 ├── src/main/resources/
 │   ├── doc/io.kestra.plugin.clevercloud.md
 │   └── metadata/
@@ -158,7 +187,8 @@ plugin-clevercloud/
 │       ├── applications.yaml
 │       ├── deployments.yaml
 │       ├── organisations.yaml
-│       └── addons.yaml
+│       ├── addons.yaml
+│       └── logs.yaml
 ├── build.gradle
 └── README.md
 ```
@@ -187,6 +217,15 @@ plugin-clevercloud/
 - `buildPutRequest` was added to `AbstractCleverCloudConnection` alongside the existing `buildGetRequest`/`buildPostRequest`/`buildDeleteRequest` to support `SetEnv` and `Scale`.
 - `addons.AddonProvisionedTrigger.evaluate()` delegates the actual add-on fetch to `addons.List` (built via `buildListTask()`, `fetchType` forced to `FETCH`) instead of hand-rolling its own HTTP call, so both entry points share one implementation. `buildListTask()` is a protected hook overridden only in `AddonProvisionedTriggerTest` (not in main source) to route the delegate at a WireMock base URL: an earlier attempt at wiring a `baseUrl()`-overriding `List` subclass directly into the trigger's main source broke Kestra's plugin registry scan for the whole module (every test failed with `No storage interface can be found for 'kestra.storage.type=local'. Supported types are: []`, since the registry scan for the module's own classes choked on an unregistered `RunnableTask` subclass with no `@Plugin`/`@Schema` metadata). Keeping the override confined to test source (mirroring the existing `Testable*` pattern already proven safe by `ListTest.TestableList`) avoids that entirely.
 - `addons.Delete` returns `VoidOutput` instead of parsing the delete confirmation message: the response body carries no information a flow needs to act on, so the `addons.model.Message` class (previously used only here) was removed along with the parsing.
+- The `logs` package targets Clever Cloud APIv4, not v2: there is no `GET /v2/logs/{addonId}` or `/v2/organisations/.../applications/.../logs` endpoint reachable on the live API (confirmed with unauthenticated probes returning a generic gateway 404, unlike real v2 routes which return a JSON 401). The only real, live, Bearer-gated application log endpoint is `GET /v4/logs/organisations/{organisationId}/applications/{applicationId}/logs`, confirmed reachable through `api-bridge.clever-cloud.com` (a fake Bearer token returns `401 invalid-token`, matching the rest of this plugin's auth pattern).
+- That v4 logs endpoint is SSE-based (`Accept: text/event-stream`) even for a bounded historical fetch. Live testing showed the server does NOT reliably close the connection once `until` is reached (it can behave like a live tail or idle open with no data), so `AbstractLogsConnection#fetchLogs` never depends on that: it runs `HttpClient#sseRequest` on a bounded worker thread and a watchdog forcibly closes the `HttpClient` (unblocking the read) as soon as the limit is reached, an event's date is at/after `until`, the hard `maxDuration` deadline elapses, or `idleTimeout` passes with no new event, whichever comes first. A real server-side close still short-circuits all of the above. Kestra's `io.kestra.core.http.client.HttpClient#sseRequest` (available since kestraVersion 1.3.0, before this plugin's current 1.3.13) is the same primitive `io.kestra.plugin.core.http.SseRequest` uses, so both `logs.Fetch` (bounded) and `logs.Stream` (bounded live tail, capped at PT15M) were implemented rather than skipped.
+- `HttpClient#sseRequest` does not enforce allowed status codes the way `HttpClient#request` does, so `AbstractLogsConnection#fetchLogs` manually checks the response status after the SSE body is consumed and throws the same body-free `HttpClientResponseException` as `AbstractCleverCloudConnection#makeCall` on a non-2xx response. This still works with the client-side timeout: a non-2xx response has nothing left to stream, so the server closes it quickly on its own, well before the watchdog would ever need to step in.
+- Reaching `limit`/`until` inside the SSE event callback also force-closes the `HttpClient` before throwing `SseStopSignal`, the same way the watchdog does. Apache's classic HTTP client quietly drains the rest of the response body before letting a handler exception propagate (so the connection can be reused), which would otherwise block for as long as a still-open, slowly-trickling connection keeps sending. Closing first makes that drain hit an already-closed connection and return immediately, confirmed by `FetchTest`/`StreamTest`'s `limitReachedMidStreamReturnsEarly`/`untilReachedMidStreamReturnsEarly` tests, which use a WireMock `withChunkedDribbleDelay` stub sized so the first chunk (containing the events) arrives in about a second while later chunks keep the connection open for well over the test's assertion bound.
+- Log drains (`GET`/`POST /v4/drains/organisations/{organisationId}/applications/{applicationId}/drains`, `DELETE .../drains/{drainId}`) are confirmed reachable the same way (fake Bearer token returns `401 invalid-token`). `CreateDrain`'s request body shape (`kind` + `recipient.type`/`url`/credentials) was cross-checked against the official `@clevercloud/client` JS client (`CreateLogDrainCommand`) rather than guessed, since neither endpoint appears in `https://api.clever-cloud.com/v2/openapi.json`.
+- There is no `OVHCLOUD` drain type on the real API: `DrainType` only has `RAW_HTTP`, `SYSLOG_TCP`, `SYSLOG_UDP`, `DATADOG`, `ELASTICSEARCH`, `NEWRELIC`, matching the recipient types the API actually accepts.
+- `CreateDrain` does not poll for the created drain to reach `ENABLED` (the official JS client does, via `waitForLogDrainEnabled`): it returns as soon as the API responds, consistent with how `applications.Create` doesn't wait for the app to reach `RUNNING` either.
+- `LogPatternTrigger` reuses the same bounded-window SSE fetch as `Fetch`/`Stream` (via the package-private static helpers on `AbstractLogsConnection`, accessible because the trigger lives in the same package) and dedups on `date` strictly-after the previous evaluation cutoff, mirroring `deployments.Trigger`'s cutoff pattern rather than `MemberChangeTrigger`'s KV-diff pattern, since log lines carry a timestamp. It passes `AbstractLogsConnection.DEFAULT_MAX_DURATION` (PT30S) and `DEFAULT_IDLE_TIMEOUT` (PT10S) as fixed internal bounds rather than exposing them as trigger properties, since a polling trigger must return well within its own `interval` regardless.
+- `Drain.status` is a nested object on the real v4 API (`{"date": ..., "status": "CREATED|ENABLED|ENABLING|DISABLING|DISABLED|DELETED", "authorId": ...}`), not a bare string: confirmed live (a real `RAW_HTTP` drain creation returned this shape and crashed deserialization when `status` was typed as `String`) and cross-checked against `CleverCloud/clever-client.js`'s raw `ApiLogDrainPayload` type, which the JS client itself flattens client-side before handing a `LogDrainStatus` string to its own callers. `Drain.Status` models the object with its real fields (`date`, `state` mapped from the JSON key `status` via `@JsonProperty`, `authorId`); `CreateDrain.Output.status` stays a plain `String` and extracts `drain.getStatus().getState()`, so the task's own output contract is unaffected by the nested shape underneath.
 
 ## References
 
