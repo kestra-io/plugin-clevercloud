@@ -9,12 +9,14 @@ import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import io.kestra.plugin.clevercloud.logs.model.LogEntry;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class FetchTest extends AbstractClevercloudTest {
 
@@ -161,6 +163,49 @@ class FetchTest extends AbstractClevercloudTest {
 
         var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext()));
         assertThat(ex.getMessage(), containsString("limit"));
+    }
+
+    // Reproduces the reported hang: the server accepts the request, sends a 200 SSE response and
+    // then never closes the connection (a live tail or an idling proxy). Without a client-side stop
+    // mechanism, this would block forever; the fix must return within maxDuration regardless.
+    @Test
+    void neverClosingStreamStillReturnsWithinMaxDuration(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withChunkedDribbleDelay(2, 3_600_000)
+                .withBody(SSE_BODY)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .maxDuration(Property.ofValue(Duration.ofSeconds(2)))
+            .idleTimeout(Property.ofValue(Duration.ofSeconds(1)))
+            .build();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
+            var output = task.run(runContext());
+            assertThat(output.getTotal(), greaterThanOrEqualTo(0));
+        });
+    }
+
+    @Test
+    void throwsWhenMaxDurationOutOfBounds(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .maxDuration(Property.ofValue(Duration.ofMinutes(10)))
+            .build();
+
+        var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext()));
+        assertThat(ex.getMessage(), containsString("maxDuration"));
+    }
+
+    @Test
+    void throwsWhenIdleTimeoutExceedsMaxDuration(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .maxDuration(Property.ofValue(Duration.ofSeconds(5)))
+            .idleTimeout(Property.ofValue(Duration.ofSeconds(10)))
+            .build();
+
+        var ex = assertThrows(IllegalArgumentException.class, () -> task.run(runContext()));
+        assertThat(ex.getMessage(), containsString("idleTimeout"));
     }
 
     @Test

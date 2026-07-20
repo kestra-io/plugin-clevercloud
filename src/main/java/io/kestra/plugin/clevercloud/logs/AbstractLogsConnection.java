@@ -17,11 +17,21 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Shared base for the logs and log drain tasks/triggers, all of which hit Clever Cloud APIv4
@@ -51,6 +61,16 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
     @Schema(title = "Application ID")
     @PluginProperty(group = "connection")
     private Property<String> applicationId;
+
+    /**
+     * Default hard cap and idle cutoff shared by callers of {@link #fetchLogs} that do not expose
+     * their own maxDuration/idleTimeout properties (currently {@link LogPatternTrigger}).
+     */
+    protected static final Duration DEFAULT_MAX_DURATION = Duration.ofSeconds(30);
+    protected static final Duration DEFAULT_IDLE_TIMEOUT = Duration.ofSeconds(10);
+
+    private static final Duration WATCHDOG_POLL_INTERVAL = Duration.ofMillis(200);
+    private static final Duration SAFETY_MARGIN = Duration.ofSeconds(5);
 
     protected String baseUrlV4() {
         return DEFAULT_BASE_URL_V4;
@@ -85,17 +105,38 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
     }
 
     /**
-     * Consumes the Clever Cloud v4 logs SSE endpoint to completion and returns the collected
-     * entries. The endpoint is fundamentally SSE-based even for a bounded historical window: the
-     * server closes the connection once the requested "until" timestamp is reached, which is what
-     * makes a deterministic, non-hanging call possible here. Non-2xx responses are checked manually
-     * because HttpClient#sseRequest does not enforce allowed status codes the way #request does.
+     * Consumes the Clever Cloud v4 logs SSE endpoint and returns whatever entries were collected.
+     * This must never rely on the server closing the connection: a live tail can idle forever and a
+     * bounded historical fetch can be served by a proxy that keeps the socket open past "until". So
+     * the read runs on a bounded worker thread and a watchdog forcibly closes the underlying
+     * HttpClient (unblocking the read with an IOException) as soon as any of the following happens,
+     * whichever comes first: limit reached, an event's date is at/after "until" (both signalled by
+     * the event callback throwing the private SseStopSignal), the hard maxDuration deadline elapses,
+     * or idleTimeout passes with no new event. A real server-side close (the historical, well-behaved
+     * case) still short-circuits all of the above. Non-2xx responses are checked manually because
+     * HttpClient#sseRequest does not enforce allowed status codes the way #request does; a non-2xx
+     * response is expected to complete quickly on its own since the server has nothing left to stream,
+     * so it is always observed before the watchdog ever needs to step in.
      */
-    protected static List<LogEntry> fetchLogs(RunContext runContext, HttpConfiguration options, String url, String apiToken) throws Exception {
+    protected static List<LogEntry> fetchLogs(
+        RunContext runContext,
+        HttpConfiguration options,
+        String url,
+        String apiToken,
+        int limit,
+        Instant until,
+        Duration maxDuration,
+        Duration idleTimeout
+    ) throws Exception {
         var logger = runContext.logger();
-        var entries = new ArrayList<LogEntry>();
+        var entries = Collections.synchronizedList(new ArrayList<LogEntry>());
+        var lastEventAt = new AtomicReference<>(Instant.now());
+        var timedOut = new AtomicBoolean(false);
 
-        try (var client = new HttpClient(runContext, options)) {
+        var client = new HttpClient(runContext, options);
+        var executor = Executors.newSingleThreadExecutor();
+        var watchdog = Executors.newSingleThreadScheduledExecutor();
+        try {
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("GET")
@@ -103,29 +144,93 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 .addHeader("Accept", "text/event-stream")
                 .build();
 
-            var response = client.sseRequest(request, String.class, event -> {
+            var future = executor.submit(() -> client.sseRequest(request, String.class, event -> {
+                lastEventAt.set(Instant.now());
                 var data = event.data();
                 if (data == null || data.isBlank()) {
                     return;
                 }
+                LogEntry entry;
                 try {
-                    entries.add(MAPPER.readValue(data, LogEntry.class));
+                    entry = MAPPER.readValue(data, LogEntry.class);
                 } catch (Exception e) {
                     logger.debug("Skipping unparsable SSE log event: {}", e.getMessage());
+                    return;
                 }
-            });
+                entries.add(entry);
+                var reachedLimit = entries.size() >= limit;
+                var reachedUntil = until != null && entry.getDate() != null && !entry.getDate().isBefore(until);
+                if (reachedLimit || reachedUntil) {
+                    throw new SseStopSignal();
+                }
+            }));
 
-            var status = response.getStatus().getCode();
-            if (status >= 400) {
-                logger.debug("Clever Cloud logs API GET {} returned {}", url, status);
-                throw new HttpClientResponseException(
-                    "Clever Cloud API error " + status + " on GET " + url + ": check apiToken and that the resource exists",
-                    response
-                );
+            var deadline = Instant.now().plus(maxDuration);
+            watchdog.scheduleWithFixedDelay(() -> {
+                var now = Instant.now();
+                var idleElapsed = Duration.between(lastEventAt.get(), now);
+                if (now.isBefore(deadline) && idleElapsed.compareTo(idleTimeout) < 0) {
+                    return;
+                }
+                if (timedOut.compareAndSet(false, true)) {
+                    logger.debug("Closing Clever Cloud logs SSE connection after a client-side timeout");
+                    try {
+                        client.close();
+                    } catch (IOException e) {
+                        logger.debug("Failed to close SSE connection after client-side timeout: {}", e.getMessage());
+                    }
+                }
+            }, WATCHDOG_POLL_INTERVAL.toMillis(), WATCHDOG_POLL_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
+
+            try {
+                var response = future.get(maxDuration.plus(SAFETY_MARGIN).toMillis(), TimeUnit.MILLISECONDS);
+                var status = response.getStatus().getCode();
+                if (status >= 400) {
+                    logger.debug("Clever Cloud logs API GET {} returned {}", url, status);
+                    throw new HttpClientResponseException(
+                        "Clever Cloud API error " + status + " on GET " + url + ": check apiToken and that the resource exists",
+                        response
+                    );
+                }
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof SseStopSignal) {
+                    logger.debug("Reached limit/until while consuming the Clever Cloud logs SSE stream");
+                } else if (!timedOut.get()) {
+                    if (e.getCause() instanceof Exception cause) {
+                        throw cause;
+                    }
+                    throw e;
+                }
+            } catch (TimeoutException e) {
+                timedOut.set(true);
+                client.close();
             }
+
+            // Covers both ways a forced close can surface to the blocked reader: an IOException
+            // (most common) or a graceful EOF that just ends the SSE parse loop with no exception.
+            if (timedOut.get()) {
+                logger.debug("Clever Cloud logs SSE stream did not close on its own, stopped after a client-side timeout with {} entries collected", entries.size());
+            }
+        } finally {
+            executor.shutdownNow();
+            watchdog.shutdownNow();
+            client.close();
         }
 
-        return entries;
+        synchronized (entries) {
+            return new ArrayList<>(entries);
+        }
+    }
+
+    /**
+     * Thrown from the SSE event callback to unwind out of HttpClient#sseRequest as soon as limit or
+     * until is reached, without waiting for the server to close the connection. Caught in fetchLogs
+     * and treated as normal completion, not a failure. No stack trace: used purely for control flow.
+     */
+    private static final class SseStopSignal extends RuntimeException {
+        private SseStopSignal() {
+            super(null, null, false, false);
+        }
     }
 
     protected static Map<String, String> logsQueryParams(String since, String until, Integer limit, String filter) {

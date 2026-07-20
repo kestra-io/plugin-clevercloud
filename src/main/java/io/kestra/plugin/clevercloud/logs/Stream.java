@@ -28,10 +28,11 @@ import java.util.List;
     title = "Consume live Clever Cloud application logs for a bounded duration",
     description = """
         Connects to the Clever Cloud APIv4 logs SSE endpoint and collects logs produced during the
-        given duration, then returns. Since a Kestra task must terminate deterministically, this is
-        a bounded live tail rather than a truly indefinite stream: set duration to how long you want
-        to keep listening (defaults to PT1M, capped at PT15M). For a historical, already-produced
-        window instead, use logs.Fetch.
+        given duration, then returns. duration is enforced client-side: the connection is force-closed
+        once it elapses even if the server keeps the SSE stream open or never sends a closing signal,
+        so this task always terminates deterministically. Set duration to how long you want to keep
+        listening (defaults to PT1M, capped at PT15M). For a historical, already-produced window
+        instead, use logs.Fetch.
 
         organisationId is always required here: unlike the rest of this plugin, the v4 logs API has
         no /self shortcut for personal accounts.
@@ -116,7 +117,9 @@ public class Stream extends AbstractLogsConnection implements RunnableTask<Strea
         );
 
         logger.info("Streaming logs for application {} for {}", rAppId, rDuration);
-        var entries = fetchLogs(runContext, getOptions(), url, rApiToken);
+        // idleTimeout is set to the same value as the hard deadline: a quiet live tail is expected
+        // behavior here, unlike Fetch, so silence alone must never end the stream early.
+        var entries = fetchLogs(runContext, getOptions(), url, rApiToken, rLimit, until, rDuration, rDuration);
         logger.info("Collected {} live log line(s)", entries.size());
 
         return Output.builder()

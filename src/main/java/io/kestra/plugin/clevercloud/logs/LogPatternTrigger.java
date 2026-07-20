@@ -161,7 +161,10 @@ public class LogPatternTrigger extends AbstractTrigger
         );
 
         logger.debug("Polling logs for application {}", rAppId);
-        var entries = AbstractLogsConnection.fetchLogs(runContext, options, url, rApiToken);
+        var entries = AbstractLogsConnection.fetchLogs(
+            runContext, options, url, rApiToken, rLimit, now,
+            AbstractLogsConnection.DEFAULT_MAX_DURATION, AbstractLogsConnection.DEFAULT_IDLE_TIMEOUT
+        );
 
         var matches = entries.stream()
             .filter(e -> e.getDate() != null && e.getDate().isAfter(cutoff))

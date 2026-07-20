@@ -130,15 +130,15 @@ Lists all add-ons provisioned in the organisation or personal account. Optional:
 
 Tasks for fetching, streaming, and forwarding application runtime logs, backed by the Clever Cloud APIv4 (not v2 like the rest of this plugin). `organisationId` and `applicationId` are always required: the v4 logs and log drain endpoints have no `/self` fallback.
 
-Both `Fetch` and `Stream` consume the same underlying endpoint, `GET /v4/logs/organisations/{organisationId}/applications/{applicationId}/logs`, which is Server-Sent Events (SSE) based even for a bounded historical fetch: the connection closes on its own once the requested `until` timestamp is reached, which is what makes both tasks terminate deterministically.
+Both `Fetch` and `Stream` consume the same underlying endpoint, `GET /v4/logs/organisations/{organisationId}/applications/{applicationId}/logs`, which is Server-Sent Events (SSE) based even for a bounded historical fetch. Neither task depends on the server closing the connection: both enforce a hard client-side stop, so they always terminate deterministically even if the connection idles open with no data.
 
 **`io.kestra.plugin.clevercloud.logs.Fetch`**
 
-Fetches application runtime logs produced within a bounded time window. Required: `applicationId`, `organisationId`, `since`. Optional: `until` (defaults to now), `limit` (1-10000, defaults to 100), `filter` (server-side text filter), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `logs` (FETCH), `log` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each log entry contains: `id`, `applicationId`, `commitId`, `deploymentId`, `instanceId`, `date`, `zone`, `pid`, `facility`, `severity`, `priority`, `version`, `service`, `message`.
+Fetches application runtime logs produced within a bounded time window. Required: `applicationId`, `organisationId`, `since`. Optional: `until` (defaults to now), `limit` (1-10000, defaults to 100), `filter` (server-side text filter), `maxDuration` (hard client-side cap, PT1S-PT5M, defaults to PT30S), `idleTimeout` (returns early once no new log line arrives for this long, PT1S-`maxDuration`, defaults to PT10S), `fetchType` (enum: FETCH, FETCH_ONE, STORE, NONE, defaults to FETCH). Outputs: `total`, plus `logs` (FETCH), `log` (FETCH_ONE), or `uri` to an ion file in internal storage (STORE). Each log entry contains: `id`, `applicationId`, `commitId`, `deploymentId`, `instanceId`, `date`, `zone`, `pid`, `facility`, `severity`, `priority`, `version`, `service`, `message`.
 
 **`io.kestra.plugin.clevercloud.logs.Stream`**
 
-Consumes live logs for a bounded `duration` (defaults to PT1M, capped at PT15M) instead of a fixed historical window, since a Kestra task must terminate deterministically rather than tail forever. Required: `applicationId`, `organisationId`. Optional: `duration`, `limit` (1-10000, defaults to 500), `filter`. Outputs: `logs`, `total`.
+Consumes live logs for a bounded `duration` (defaults to PT1M, capped at PT15M) instead of a fixed historical window, since a Kestra task must terminate deterministically rather than tail forever. `duration` is enforced client-side: the connection is force-closed once it elapses even if the server keeps it open. Required: `applicationId`, `organisationId`. Optional: `duration`, `limit` (1-10000, defaults to 500), `filter`. Outputs: `logs`, `total`.
 
 **`io.kestra.plugin.clevercloud.logs.ListDrains`**
 

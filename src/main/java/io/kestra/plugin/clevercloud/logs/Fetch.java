@@ -18,6 +18,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -32,10 +33,12 @@ import java.util.List;
         Retrieves application runtime logs emitted within a bounded time window, via the Clever
         Cloud APIv4 logs endpoint (GET /v4/logs/organisations/{organisationId}/applications/{applicationId}/logs).
 
-        This endpoint is Server-Sent Events (SSE) based even for a bounded fetch: the connection
-        closes on its own once "until" is reached, so this task always terminates deterministically.
-        Set until explicitly (rather than leaving it open-ended) to fetch a historical window; use
-        logs.Stream instead to tail logs as they are produced.
+        This endpoint is Server-Sent Events (SSE) based even for a bounded fetch, and the server is
+        not guaranteed to close the connection once "until" is reached. This task never depends on
+        that: it always returns whatever log lines it collected, at the latest once maxDuration
+        elapses, or sooner once idleTimeout passes with no new log line. Set until explicitly (rather
+        than leaving it open-ended) to fetch a historical window; use logs.Stream instead to tail
+        logs as they are produced.
 
         organisationId is always required here: unlike the rest of this plugin, the v4 logs API has
         no /self shortcut for personal accounts.
@@ -78,8 +81,8 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
 
     @Schema(
         title = "End of the time range to fetch logs from",
-        description = "ISO-8601 instant, defaults to now. Kept bounded on purpose so the underlying " +
-            "SSE stream always closes once the historical window is exhausted."
+        description = "ISO-8601 instant, defaults to now. Only logs emitted before this time are returned; " +
+            "the task stops consuming the stream once a log line at or after this time is seen."
     )
     @PluginProperty(group = "main")
     private Property<Instant> until;
@@ -107,6 +110,26 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
     @Builder.Default
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
+    @Schema(
+        title = "Maximum time to wait for the SSE stream before returning",
+        description = "ISO-8601 duration. Hard client-side cap so this task always returns, even if the underlying " +
+            "SSE connection never closes on its own. Whatever log lines were collected by then are returned. " +
+            "Defaults to PT30S, must be between PT1S and PT5M."
+    )
+    @PluginProperty(group = "reliability")
+    @Builder.Default
+    private Property<Duration> maxDuration = Property.ofValue(DEFAULT_MAX_DURATION);
+
+    @Schema(
+        title = "Maximum time to wait without receiving a new log line before returning",
+        description = "ISO-8601 duration. Returns early with whatever was collected once no new log line arrives " +
+            "for this long, so a quiet application does not wait out the full maxDuration. Defaults to PT10S, " +
+            "must be between PT1S and maxDuration."
+    )
+    @PluginProperty(group = "reliability")
+    @Builder.Default
+    private Property<Duration> idleTimeout = Property.ofValue(DEFAULT_IDLE_TIMEOUT);
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
@@ -127,6 +150,14 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
             throw new IllegalArgumentException("limit must be between 1 and 10000, got " + rLimit);
         }
         var rFilter = runContext.render(filter).as(String.class).orElse(null);
+        var rMaxDuration = runContext.render(maxDuration).as(Duration.class).orElse(DEFAULT_MAX_DURATION);
+        if (rMaxDuration.isNegative() || rMaxDuration.isZero() || rMaxDuration.compareTo(Duration.ofMinutes(5)) > 0) {
+            throw new IllegalArgumentException("maxDuration must be between PT1S and PT5M, got " + rMaxDuration);
+        }
+        var rIdleTimeout = runContext.render(idleTimeout).as(Duration.class).orElse(DEFAULT_IDLE_TIMEOUT);
+        if (rIdleTimeout.isNegative() || rIdleTimeout.isZero() || rIdleTimeout.compareTo(rMaxDuration) > 0) {
+            throw new IllegalArgumentException("idleTimeout must be between PT1S and maxDuration, got " + rIdleTimeout);
+        }
 
         var url = appendQuery(
             logsUrl(baseUrlV4(), rOrgId, rAppId),
@@ -134,7 +165,7 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
         );
 
         logger.info("Fetching logs for application {} between {} and {}", rAppId, rSince, rUntil);
-        var entries = fetchLogs(runContext, getOptions(), url, rApiToken);
+        var entries = fetchLogs(runContext, getOptions(), url, rApiToken, rLimit, rUntil, rMaxDuration, rIdleTimeout);
         logger.info("Found {} log line(s)", entries.size());
 
         var result = fetchOutput(runContext, fetchType, entries);

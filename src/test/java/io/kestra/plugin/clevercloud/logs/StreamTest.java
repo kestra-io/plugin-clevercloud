@@ -12,6 +12,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class StreamTest extends AbstractClevercloudTest {
 
@@ -62,6 +63,27 @@ class StreamTest extends AbstractClevercloudTest {
         verify(getRequestedFor(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
             .withHeader("Authorization", equalTo("Bearer test-api-token"))
             .withHeader("Accept", equalTo("text/event-stream")));
+    }
+
+    // Reproduces the reported hang: the server accepts the request, sends a 200 SSE response and
+    // then never closes the connection (a genuine live tail). Without client-side enforcement of
+    // duration, this would block forever; the fix must force-close and return within duration.
+    @Test
+    void neverClosingStreamStillReturnsWithinDuration(WireMockRuntimeInfo wireMockRuntimeInfo) {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withChunkedDribbleDelay(2, 3_600_000)
+                .withBody(SSE_BODY)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .duration(Property.ofValue(Duration.ofSeconds(2)))
+            .build();
+
+        assertTimeoutPreemptively(Duration.ofSeconds(8), () -> {
+            var output = task.run(runContext());
+            assertThat(output.getTotal(), greaterThanOrEqualTo(0));
+        });
     }
 
     @Test
