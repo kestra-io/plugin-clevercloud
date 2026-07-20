@@ -6,10 +6,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * A single entry of the public add-on providers catalog (GET .../products/addonproviders), used to
- * resolve a user-facing plan slug (e.g. "free", "dev") to the API's required plan_... id.
- */
+/** Entry of the public add-on providers catalog, used to resolve a plan slug to its plan_... id. */
 @Data
 @NoArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)

@@ -120,13 +120,10 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
 
     private static final String PLAN_ID_PREFIX = "plan_";
     private static final String PROVIDERS_CATALOG_PATH = "products/addonproviders";
-    // The catalog is public data hosted directly on the Clever Cloud API; used as a fallback when
-    // the plugin's configured base URL (e.g. api-bridge) does not expose it.
+    // Public catalog, used as a fallback when the configured base URL doesn't expose it.
     private static final String PROVIDERS_CATALOG_FALLBACK_URL = "https://api.clever-cloud.com/v2/products/addonproviders";
 
-    /**
-     * Overridable so tests can redirect the fallback catalog call to WireMock, mirroring {@link #baseUrl()}.
-     */
+    /** Overridable so tests can redirect the fallback catalog call to WireMock. */
     protected String providersCatalogFallbackUrl() {
         return PROVIDERS_CATALOG_FALLBACK_URL;
     }
@@ -174,10 +171,7 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
             .build();
     }
 
-    /**
-     * Resolves a user-facing plan slug (or omitted plan) to the plan_... id required by the API.
-     * A value already looking like a raw plan id is passed through as-is, without a catalog lookup.
-     */
+    /** Resolves a plan slug to the plan_... id required by the API; a raw plan id passes through as-is. */
     private String resolvePlanId(RunContext runContext, String rProviderId, String rPlanInput) throws Exception {
         if (rPlanInput != null && rPlanInput.startsWith(PLAN_ID_PREFIX)) {
             return rPlanInput;
@@ -227,11 +221,7 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
         return List.of(MAPPER.readValue(fetchFallbackCatalog(runContext), AddonProvider[].class));
     }
 
-    /**
-     * Fetches the public catalog directly, bypassing the plugin's configured base URL. Scrubs the
-     * response body from any non-2xx failure, same as {@link AbstractCleverCloudConnection#makeCall}
-     * does for the primary path, so a fallback error can never leak a raw response body.
-     */
+    /** Fetches the public catalog directly, scrubbing the response body on failure like {@link AbstractCleverCloudConnection#makeCall}. */
     private String fetchFallbackCatalog(RunContext runContext) throws Exception {
         var logger = runContext.logger();
         try (var client = new HttpClient(runContext, getOptions())) {

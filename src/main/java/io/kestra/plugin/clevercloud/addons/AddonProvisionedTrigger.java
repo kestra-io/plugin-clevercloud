@@ -131,8 +131,7 @@ public class AddonProvisionedTrigger extends AbstractTrigger
         var kvKey = "addon-trigger-" + context.getFlowId() + "-" + context.getTriggerId() + "-" + (rOrgId != null ? rOrgId : "self");
         var kv = runContext.namespaceKv(context.getNamespace());
 
-        // Refreshed every poll while the trigger is active, so a 10x-interval TTL never expires
-        // a live baseline but ages out an orphaned entry a few polls after the trigger stops.
+        // 10x interval: keeps a live baseline alive, ages out an orphaned entry after the trigger stops.
         var baselineTtl = interval.multipliedBy(10);
 
         var previousIdsOptional = kv.getValue(kvKey);
@@ -177,11 +176,7 @@ public class AddonProvisionedTrigger extends AbstractTrigger
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
     }
 
-    /**
-     * Builds the delegate {@link io.kestra.plugin.clevercloud.addons.List} task that performs the actual
-     * add-on fetch, so both entry points share one HTTP implementation instead of duplicating it here.
-     * Overridden in tests to route the delegate at a WireMock base URL.
-     */
+    /** Delegates the add-on fetch to {@link io.kestra.plugin.clevercloud.addons.List}; overridden in tests for WireMock. */
     protected io.kestra.plugin.clevercloud.addons.List buildListTask() {
         return io.kestra.plugin.clevercloud.addons.List.builder()
             .id(this.id)
