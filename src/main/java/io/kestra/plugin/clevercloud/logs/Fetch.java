@@ -165,7 +165,7 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
         );
 
         logger.info("Fetching logs for application {} between {} and {}", rAppId, rSince, rUntil);
-        var entries = fetchLogs(runContext, getOptions(), url, rApiToken, rLimit, rUntil, rMaxDuration, rIdleTimeout);
+        var entries = fetchLogs(runContext, new LogsSseRequest(getOptions(), url, rApiToken, rLimit, rUntil, rMaxDuration, rIdleTimeout));
         logger.info("Found {} log line(s)", entries.size());
 
         var result = fetchOutput(runContext, fetchType, entries);

@@ -96,11 +96,10 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
     }
 
     /**
-     * Consumes the Clever Cloud v4 logs SSE endpoint. Never relies on the server closing the connection:
-     * a watchdog force-closes it on limit/until/maxDuration/idleTimeout, whichever comes first.
+     * Groups the parameters of a single {@link #fetchLogs} call, including the HTTP options since
+     * both fully describe the one SSE request being made.
      */
-    protected static List<LogEntry> fetchLogs(
-        RunContext runContext,
+    public record LogsSseRequest(
         HttpConfiguration options,
         String url,
         String apiToken,
@@ -108,7 +107,14 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
         Instant until,
         Duration maxDuration,
         Duration idleTimeout
-    ) throws Exception {
+    ) {
+    }
+
+    /**
+     * Consumes the Clever Cloud v4 logs SSE endpoint. Never relies on the server closing the connection:
+     * a watchdog force-closes it on limit/until/maxDuration/idleTimeout, whichever comes first.
+     */
+    protected static List<LogEntry> fetchLogs(RunContext runContext, LogsSseRequest request) throws Exception {
         var logger = runContext.logger();
         var entries = Collections.synchronizedList(new ArrayList<LogEntry>());
         var lastEventAt = new AtomicReference<>(Instant.now());
@@ -116,15 +122,15 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
 
         var executor = Executors.newSingleThreadExecutor();
         var watchdog = Executors.newSingleThreadScheduledExecutor();
-        try (var client = new HttpClient(runContext, options)) {
-            var request = HttpRequest.builder()
-                .uri(URI.create(url))
+        try (var client = new HttpClient(runContext, request.options())) {
+            var httpRequest = HttpRequest.builder()
+                .uri(URI.create(request.url()))
                 .method("GET")
-                .addHeader("Authorization", "Bearer " + apiToken)
+                .addHeader("Authorization", "Bearer " + request.apiToken())
                 .addHeader("Accept", "text/event-stream")
                 .build();
 
-            var future = executor.submit(() -> client.sseRequest(request, String.class, event -> {
+            var future = executor.submit(() -> client.sseRequest(httpRequest, String.class, event -> {
                 lastEventAt.set(Instant.now());
                 var data = event.data();
                 if (data == null || data.isBlank()) {
@@ -138,8 +144,8 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                     return;
                 }
                 entries.add(entry);
-                var reachedLimit = entries.size() >= limit;
-                var reachedUntil = until != null && entry.getDate() != null && !entry.getDate().isBefore(until);
+                var reachedLimit = entries.size() >= request.limit();
+                var reachedUntil = request.until() != null && entry.getDate() != null && !entry.getDate().isBefore(request.until());
                 if (reachedLimit || reachedUntil) {
                     // Close before throwing so Apache's client hits an already-closed connection instead of draining the open stream first.
                     try {
@@ -151,11 +157,11 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 }
             }));
 
-            var deadline = Instant.now().plus(maxDuration);
+            var deadline = Instant.now().plus(request.maxDuration());
             watchdog.scheduleWithFixedDelay(() -> {
                 var now = Instant.now();
                 var idleElapsed = Duration.between(lastEventAt.get(), now);
-                if (now.isBefore(deadline) && idleElapsed.compareTo(idleTimeout) < 0) {
+                if (now.isBefore(deadline) && idleElapsed.compareTo(request.idleTimeout()) < 0) {
                     return;
                 }
                 if (timedOut.compareAndSet(false, true)) {
@@ -169,12 +175,12 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
             }, WATCHDOG_POLL_INTERVAL.toMillis(), WATCHDOG_POLL_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
 
             try {
-                var response = future.get(maxDuration.plus(SAFETY_MARGIN).toMillis(), TimeUnit.MILLISECONDS);
+                var response = future.get(request.maxDuration().plus(SAFETY_MARGIN).toMillis(), TimeUnit.MILLISECONDS);
                 var status = response.getStatus().getCode();
                 if (status >= 400) {
-                    logger.debug("Clever Cloud logs API GET {} returned {}", url, status);
+                    logger.debug("Clever Cloud logs API GET {} returned {}", request.url(), status);
                     throw new HttpClientResponseException(
-                        "Clever Cloud API error " + status + " on GET " + url + ": check apiToken and that the resource exists",
+                        "Clever Cloud API error " + status + " on GET " + request.url() + ": check apiToken and that the resource exists",
                         response
                     );
                 }

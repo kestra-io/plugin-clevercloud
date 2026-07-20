@@ -18,8 +18,6 @@ public class Drain {
         private String url;
     }
 
-    // real API shape: {"date": "...", "status": "CREATED|ENABLED|ENABLING|DISABLING|DISABLED|DELETED", "authorId": "..."},
-    // not a bare string, confirmed against CleverCloud/clever-client.js's ApiLogDrainPayload
     @Data
     @NoArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
