@@ -42,7 +42,7 @@ import java.util.LinkedHashMap;
 @Plugin(
     examples = {
         @Example(
-            title = "Create a Datadog log drain",
+            title = "Create a New Relic log drain",
             full = true,
             code = """
                 id: setup_log_drain
@@ -54,9 +54,9 @@ import java.util.LinkedHashMap;
                     apiToken: "{{ secret('CC_API_TOKEN') }}"
                     organisationId: "orga_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     applicationId: "app_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    drainType: DATADOG
-                    url: "https://http-intake.logs.datadoghq.com/api/v2/logs"
-                    apiKey: "{{ secret('DATADOG_API_KEY') }}"
+                    drainType: NEWRELIC
+                    url: "https://log-api.newrelic.com/log/v1"
+                    newRelicApiKey: "{{ secret('NEWRELIC_API_KEY') }}"
                 """
         )
     }
@@ -112,7 +112,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
     )
     @PluginProperty(group = "connection", secret = true)
     @ToString.Exclude
-    private Property<String> apiKey;
+    private Property<String> newRelicApiKey;
 
     @Schema(
         title = "RFC 5424 structured data parameters",
@@ -151,7 +151,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
             runContext.render(indexPrefix).as(String.class).ifPresent(v -> recipient.put("index", v));
         }
         if (rDrainType == DrainType.NEWRELIC) {
-            runContext.render(apiKey).as(String.class).ifPresent(v -> recipient.put("apiKey", v));
+            runContext.render(newRelicApiKey).as(String.class).ifPresent(v -> recipient.put("apiKey", v));
         }
         if (rDrainType == DrainType.SYSLOG_TCP || rDrainType == DrainType.SYSLOG_UDP) {
             runContext.render(structuredDataParameters).as(String.class)

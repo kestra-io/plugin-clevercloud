@@ -80,7 +80,7 @@ class CreateDrainTest extends AbstractClevercloudTest {
         var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
             .drainType(Property.ofValue(DrainType.DATADOG))
             .url(Property.ofValue("https://http-intake.logs.datadoghq.com/api/v2/logs"))
-            .apiKey(Property.ofValue("should-not-be-sent"))
+            .newRelicApiKey(Property.ofValue("should-not-be-sent"))
             .build();
         task.run(runContext());
 

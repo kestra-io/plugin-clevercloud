@@ -176,7 +176,7 @@ Lists the log drains forwarding an application's logs to an external platform. R
 
 **`io.kestra.plugin.clevercloud.logs.CreateDrain`**
 
-Creates a log drain. Required: `applicationId`, `organisationId`, `drainType` (enum: RAW_HTTP, SYSLOG_TCP, SYSLOG_UDP, DATADOG, ELASTICSEARCH, NEWRELIC), `url`. Optional: `kind` (enum: LOG, ACCESSLOG, AUDITLOG, defaults to LOG), `username`/`password` (RAW_HTTP or ELASTICSEARCH), `indexPrefix` (ELASTICSEARCH), `apiKey` (NEWRELIC), `structuredDataParameters` (SYSLOG_TCP or SYSLOG_UDP). There is no dedicated OVHCLOUD drain type on the Clever Cloud API: forward to OVHcloud via `RAW_HTTP` or `SYSLOG_TCP`/`SYSLOG_UDP` instead. Returns as soon as the drain is created, without waiting for it to reach `ENABLED`. Outputs: `id`, `kind`, `status`.
+Creates a log drain. Required: `applicationId`, `organisationId`, `drainType` (enum: RAW_HTTP, SYSLOG_TCP, SYSLOG_UDP, DATADOG, ELASTICSEARCH, NEWRELIC), `url`. Optional: `kind` (enum: LOG, ACCESSLOG, AUDITLOG, defaults to LOG), `username`/`password` (RAW_HTTP or ELASTICSEARCH), `indexPrefix` (ELASTICSEARCH), `newRelicApiKey` (NEWRELIC), `structuredDataParameters` (SYSLOG_TCP or SYSLOG_UDP). There is no dedicated OVHCLOUD drain type on the Clever Cloud API: forward to OVHcloud via `RAW_HTTP` or `SYSLOG_TCP`/`SYSLOG_UDP` instead. Returns as soon as the drain is created, without waiting for it to reach `ENABLED`. Outputs: `id`, `kind`, `status`.
 
 **`io.kestra.plugin.clevercloud.logs.DeleteDrain`**
 
