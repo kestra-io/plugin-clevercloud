@@ -25,6 +25,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -40,9 +41,10 @@ import java.util.regex.Pattern;
         the previous evaluation matches the given regex pattern.
 
         Only log lines whose date is strictly after the previous evaluation cutoff are considered,
-        so already-seen lines never re-fire the trigger. If more than one new line matches in the
-        same poll, only the most recent one fires the trigger; the interval should be kept short
-        enough that bursts of matching lines are unlikely to be missed.
+        so already-seen lines never re-fire the trigger. The trigger fires once per poll: matchedLine
+        holds the first (oldest) matching line, and matchedLines holds every matching line found in
+        that poll, in chronological order, so a burst of matching lines within one interval is never
+        dropped.
 
         organisationId is always required here: unlike the rest of this plugin, the v4 logs API
         has no /self shortcut for personal accounts.
@@ -178,21 +180,18 @@ public class LogPatternTrigger extends AbstractTrigger
             return Optional.empty();
         }
 
-        if (matches.size() > 1) {
-            logger.warn(
-                "Found {} new log lines matching pattern '{}' in this poll, only the most recent will fire the trigger, the others are skipped",
-                matches.size(), rPattern.pattern()
-            );
-        }
+        logger.info(
+            "Found {} new log line(s) matching pattern '{}' for application {}",
+            matches.size(), rPattern.pattern(), rAppId
+        );
 
-        var matched = matches.getLast();
-        logger.info("Log line matched pattern '{}' for application {}", rPattern.pattern(), rAppId);
-
+        var first = matches.getFirst();
         var output = Output.builder()
-            .matchedLine(matched.getMessage())
-            .matchedAt(matched.getDate())
-            .severity(matched.getSeverity())
-            .service(matched.getService())
+            .matchedLine(first.getMessage())
+            .matchedLines(matches.stream().map(LogEntry::getMessage).toList())
+            .matchedAt(first.getDate())
+            .severity(first.getSeverity())
+            .service(first.getService())
             .build();
 
         return Optional.of(TriggerService.generateExecution(this, conditionContext, context, output));
@@ -202,16 +201,19 @@ public class LogPatternTrigger extends AbstractTrigger
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
 
-        @Schema(title = "Log message that matched the pattern")
+        @Schema(title = "First log message that matched the pattern", description = "The oldest new log line matching the pattern found in this poll.")
         private final String matchedLine;
 
-        @Schema(title = "Instant the matching log line was emitted")
+        @Schema(title = "All log messages that matched the pattern", description = "Every new log line matching the pattern found in this poll, in chronological order.")
+        private final List<String> matchedLines;
+
+        @Schema(title = "Instant the first matching log line was emitted")
         private final Instant matchedAt;
 
-        @Schema(title = "Severity of the matching log line")
+        @Schema(title = "Severity of the first matching log line")
         private final String severity;
 
-        @Schema(title = "Service that emitted the matching log line")
+        @Schema(title = "Service that emitted the first matching log line")
         private final String service;
     }
 }

@@ -221,8 +221,8 @@ class FetchTest extends AbstractClevercloudTest {
     }
 
     // Same open-connection setup, but this time the limit is never reached (a generous limit) and
-    // instead "until" is satisfied by the first event's own date, exercising the other branch of
-    // the SseStopSignal sentinel.
+    // instead "until" is satisfied by log_2's date, exercising the other branch of the SseStopSignal
+    // sentinel: log_1 (before until) is kept, log_2 (at/after until) stops the stream and is excluded.
     @Test
     void untilReachedMidStreamReturnsEarly(WireMockRuntimeInfo wireMockRuntimeInfo) {
         stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
@@ -232,7 +232,7 @@ class FetchTest extends AbstractClevercloudTest {
                 .withBody(OPEN_CONNECTION_BODY)));
 
         var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
-            .until(Property.ofValue(Instant.parse("2024-01-01T10:00:00Z")))
+            .until(Property.ofValue(Instant.parse("2024-01-01T10:00:01Z")))
             .limit(Property.ofValue(10000))
             .maxDuration(Property.ofValue(Duration.ofSeconds(20)))
             .idleTimeout(Property.ofValue(Duration.ofSeconds(15)))
@@ -243,6 +243,33 @@ class FetchTest extends AbstractClevercloudTest {
             assertThat(output.getTotal(), is(1));
             assertThat(output.getLogs().getFirst().getId(), is("log_1"));
         });
+    }
+
+    // until is documented as an exclusive upper bound: a line dated exactly at until, and any line
+    // after it, must never be returned, only strictly earlier lines are.
+    @Test
+    void excludesLogLinesAtOrAfterUntilBoundary(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withBody("""
+                    data: {"id":"log_before","date":"2024-01-01T09:59:59Z","severity":"info","service":"my-app","message":"before boundary"}
+
+                    data: {"id":"log_at","date":"2024-01-01T10:00:00Z","severity":"info","service":"my-app","message":"at boundary"}
+
+                    data: {"id":"log_after","date":"2024-01-01T10:00:01Z","severity":"info","service":"my-app","message":"after boundary"}
+
+                    """)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .until(Property.ofValue(Instant.parse("2024-01-01T10:00:00Z")))
+            .limit(Property.ofValue(10000))
+            .build();
+
+        var output = task.run(runContext());
+
+        assertThat(output.getTotal(), is(1));
+        assertThat(output.getLogs().getFirst().getId(), is("log_before"));
     }
 
     @Test

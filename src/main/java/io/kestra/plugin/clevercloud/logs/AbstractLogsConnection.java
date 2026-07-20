@@ -122,6 +122,9 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
 
         var executor = Executors.newSingleThreadExecutor();
         var watchdog = Executors.newSingleThreadScheduledExecutor();
+        // client.close() must be idempotent/thread-safe: it can be called from up to three places
+        // racing each other - this SSE callback (limit/until), the watchdog (timeout), and the
+        // try-with-resources block below on normal exit.
         try (var client = new HttpClient(runContext, request.options())) {
             var httpRequest = HttpRequest.builder()
                 .uri(URI.create(request.url()))
@@ -143,15 +146,24 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                     logger.debug("Skipping unparsable SSE log event: {}", e.getMessage());
                     return;
                 }
-                entries.add(entry);
-                var reachedLimit = entries.size() >= request.limit();
+                // until is an exclusive upper bound: stop here without adding a line dated at or after it.
                 var reachedUntil = request.until() != null && entry.getDate() != null && !entry.getDate().isBefore(request.until());
-                if (reachedLimit || reachedUntil) {
+                if (reachedUntil) {
                     // Close before throwing so Apache's client hits an already-closed connection instead of draining the open stream first.
                     try {
                         client.close();
                     } catch (IOException e) {
-                        logger.debug("Failed to close SSE connection after reaching limit/until: {}", e.getMessage());
+                        logger.debug("Failed to close SSE connection after reaching until: {}", e.getMessage());
+                    }
+                    throw new SseStopSignal();
+                }
+                entries.add(entry);
+                if (entries.size() >= request.limit()) {
+                    // Close before throwing so Apache's client hits an already-closed connection instead of draining the open stream first.
+                    try {
+                        client.close();
+                    } catch (IOException e) {
+                        logger.debug("Failed to close SSE connection after reaching limit: {}", e.getMessage());
                     }
                     throw new SseStopSignal();
                 }
@@ -198,9 +210,9 @@ public abstract class AbstractLogsConnection extends AbstractCleverCloudConnecti
                 client.close();
             }
 
-            // Hitting the client-side limit is the normal path here, not a warning: the server rarely closes on its own.
+            // Hitting the client-side timeout is the normal path here, not a warning: a live tail rarely closes on its own.
             if (timedOut.get()) {
-                logger.debug("Stopped logs SSE after client-side limit, collected {} entries", entries.size());
+                logger.debug("Stopped logs SSE after client-side maxDuration/idleTimeout, collected {} entries", entries.size());
             }
         } finally {
             executor.shutdownNow();

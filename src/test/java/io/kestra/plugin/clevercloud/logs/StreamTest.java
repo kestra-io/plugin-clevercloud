@@ -7,6 +7,7 @@ import io.kestra.plugin.clevercloud.AbstractClevercloudTest;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -117,6 +118,30 @@ class StreamTest extends AbstractClevercloudTest {
             assertThat(output.getTotal(), is(1));
             assertThat(output.getLogs().getFirst().getId(), is("log_1"));
         });
+    }
+
+    // Stream fixes idleTimeout to duration (see Stream#run), unlike Fetch, so a quiet SSE connection
+    // must run the full duration instead of returning early once no new log line arrives.
+    @Test
+    void silenceDoesNotEndStreamEarly(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withChunkedDribbleDelay(DRIBBLE_CHUNKS, DRIBBLE_TOTAL_MILLIS)
+                .withBody(OPEN_CONNECTION_BODY)));
+
+        var task = baseBuilder(wireMockRuntimeInfo.getHttpBaseUrl())
+            .duration(Property.ofValue(Duration.ofSeconds(3)))
+            .limit(Property.ofValue(10000))
+            .build();
+
+        var start = Instant.now();
+        var output = task.run(runContext());
+        var elapsed = Duration.between(start, Instant.now());
+
+        assertThat(output.getTotal(), is(2));
+        assertThat("a quiet stream must run the full duration, not exit early on silence",
+            elapsed.compareTo(Duration.ofSeconds(3)) >= 0, is(true));
     }
 
     @Test

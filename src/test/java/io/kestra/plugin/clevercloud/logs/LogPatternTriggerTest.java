@@ -111,6 +111,39 @@ class LogPatternTriggerTest {
     }
 
     @Test
+    void firesOnceWithAllMatchesWhenMultipleLinesMatchInOnePoll(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
+        var lastPoll = ZonedDateTime.now().minusMinutes(5);
+        var firstMatchDate = java.time.Instant.now().minusSeconds(2);
+        var secondMatchDate = java.time.Instant.now();
+
+        stubFor(get(urlPathEqualTo("/logs/organisations/orga_test/applications/app_test/logs"))
+            .willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "text/event-stream")
+                .withBody("""
+                    data: {"id":"log_1","date":"%s","severity":"fatal","service":"my-app","message":"FATAL first error"}
+
+                    data: {"id":"log_2","date":"%s","severity":"fatal","service":"my-app","message":"FATAL second error"}
+
+                    """.formatted(firstMatchDate, secondMatchDate))));
+
+        var trigger = buildTrigger(wireMockRuntimeInfo.getHttpBaseUrl());
+        var trigCtx = triggerContext(lastPoll);
+        var condCtx = conditionContext(trigger, trigCtx);
+
+        Optional<Execution> result = trigger.evaluate(condCtx, trigCtx);
+
+        assertThat("trigger must fire once even when several new lines match in the same poll", result.isPresent(), is(true));
+        @SuppressWarnings("unchecked")
+        var triggerVars = (java.util.Map<String, Object>) result.get().getTrigger().getVariables();
+        @SuppressWarnings("unchecked")
+        var matchedLines = (java.util.List<String>) triggerVars.get("matchedLines");
+        var matchedLine = (String) triggerVars.get("matchedLine");
+
+        assertThat("no match should be dropped", matchedLines, contains("FATAL first error", "FATAL second error"));
+        assertThat("matchedLine must point at the first (oldest) match, not the last", matchedLine, is("FATAL first error"));
+    }
+
+    @Test
     void doesNotRefireOnLogLineSeenBeforeLastPoll(WireMockRuntimeInfo wireMockRuntimeInfo) throws Exception {
         var lastPoll = ZonedDateTime.now().minusMinutes(5);
         var oldLogDate = lastPoll.minusMinutes(10).toInstant();
