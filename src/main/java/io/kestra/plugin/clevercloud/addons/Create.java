@@ -37,9 +37,10 @@ import java.util.stream.Collectors;
     title = "Create (provision) a Clever Cloud add-on",
     description = """
         Provisions a new add-on (database, cache, or other managed service) in the given
-        organisation or personal account. providerId, plan, and region are required by the
-        Clever Cloud API: find valid values for your account with the Clever Cloud console or
-        the public products catalog at https://api.clever-cloud.com/v2/products/addonproviders.
+        organisation or personal account. providerId and region are required, plan is optional
+        and defaults to the cheapest plan for the provider. Find valid values for your account
+        with the Clever Cloud console or the public products catalog at
+        https://api.clever-cloud.com/v2/products/addonproviders.
         Provisioning is synchronous: the task returns once the add-on is created and usable.
         Use addons.LinkToApplication afterwards to attach it to an application.
         When organisationId is omitted, the personal account endpoint (/self) is used.
@@ -115,7 +116,7 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
         title = "Add-on version",
         description = "Version identifier of the underlying service, e.g. a PostgreSQL major version. When omitted, the provider's default version is used."
     )
-    @PluginProperty(group = "execution")
+    @PluginProperty(group = "main")
     private Property<String> addonVersion;
 
     private static final String PLAN_ID_PREFIX = "plan_";
