@@ -84,7 +84,7 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
         description = "ISO-8601 instant, defaults to now. Only logs emitted before this time are returned; " +
             "the task stops consuming the stream once a log line at or after this time is seen."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "processing")
     private Property<Instant> until;
 
     @Schema(

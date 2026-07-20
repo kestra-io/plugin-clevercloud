@@ -75,13 +75,13 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         title = "Which log stream this drain forwards",
         description = "One of LOG (application runtime logs), ACCESSLOG, AUDITLOG. Defaults to LOG."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "advanced")
     @Builder.Default
     private Property<DrainKind> kind = Property.ofValue(DrainKind.LOG);
 
     @NotNull
     @Schema(title = "Destination URL to forward logs to")
-    @PluginProperty(group = "destination")
+    @PluginProperty(group = "main")
     private Property<String> url;
 
     @Schema(
@@ -103,7 +103,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         title = "Elasticsearch index prefix",
         description = "Only used when drainType is ELASTICSEARCH."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "processing")
     private Property<String> indexPrefix;
 
     @Schema(
@@ -118,7 +118,7 @@ public class CreateDrain extends AbstractLogsConnection implements RunnableTask<
         title = "RFC 5424 structured data parameters",
         description = "Only used when drainType is SYSLOG_TCP or SYSLOG_UDP."
     )
-    @PluginProperty(group = "connection")
+    @PluginProperty(group = "advanced")
     private Property<String> structuredDataParameters;
 
     @Override
