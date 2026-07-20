@@ -50,7 +50,7 @@ import java.util.LinkedHashMap;
                     name: my-node-app
                     zone: par
                     instanceType: node
-                    instanceVersion: "20260617"
+                    instanceVersion: "20260701"
                     minInstances: 1
                     maxInstances: 2
                     minFlavor: XS
@@ -81,12 +81,20 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
     @PluginProperty(group = "main")
     private Property<String> zone;
 
-    @Schema(title = "Runtime type, e.g. node, java, docker, php")
+    @Schema(
+        title = "Runtime type, e.g. node, java, docker, php",
+        description = "Required by the Clever Cloud API on creation. Valid values are returned by GET /v2/products/instances."
+    )
     @PluginProperty(group = "execution")
+    @NotNull
     private Property<String> instanceType;
 
-    @Schema(title = "Runtime version, e.g. a Node.js or Java version identifier from the Clever Cloud console")
+    @Schema(
+        title = "Runtime version, e.g. a Node.js or Java version identifier",
+        description = "Required by the Clever Cloud API on creation. Valid values for the chosen instanceType are returned by GET /v2/products/instances."
+    )
     @PluginProperty(group = "execution")
+    @NotNull
     private Property<String> instanceVersion;
 
     @Schema(title = "Minimum number of running instances")
@@ -105,6 +113,14 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
     @PluginProperty(group = "execution")
     private Property<String> maxFlavor;
 
+    @Schema(
+        title = "Deployment method",
+        description = "\"git\" (default) or \"ftp\". Clever Cloud requires this field on application creation."
+    )
+    @PluginProperty(group = "main")
+    @Builder.Default
+    private Property<String> deploy = Property.ofValue("git");
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var logger = runContext.logger();
@@ -116,10 +132,15 @@ public class Create extends AbstractCleverCloudConnection implements RunnableTas
 
         var payload = new LinkedHashMap<String, Object>();
         payload.put("name", rName);
+        payload.put("deploy", runContext.render(deploy).as(String.class).orElse("git"));
         runContext.render(applicationDescription).as(String.class).ifPresent(v -> payload.put("description", v));
         runContext.render(zone).as(String.class).ifPresent(v -> payload.put("zone", v));
-        runContext.render(instanceType).as(String.class).ifPresent(v -> payload.put("instanceType", v));
-        runContext.render(instanceVersion).as(String.class).ifPresent(v -> payload.put("instanceVersion", v));
+        payload.put("instanceType", runContext.render(instanceType).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("instanceType is required")
+        ));
+        payload.put("instanceVersion", runContext.render(instanceVersion).as(String.class).orElseThrow(
+            () -> new IllegalArgumentException("instanceVersion is required")
+        ));
         runContext.render(minInstances).as(Integer.class).ifPresent(v -> payload.put("minInstances", v));
         runContext.render(maxInstances).as(Integer.class).ifPresent(v -> payload.put("maxInstances", v));
         runContext.render(minFlavor).as(String.class).ifPresent(v -> payload.put("minFlavor", v));
