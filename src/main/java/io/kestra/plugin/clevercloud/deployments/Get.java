@@ -82,7 +82,7 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
     @NotNull
     private Property<String> applicationId;
 
-    @Schema(title = "Deployment ID (uuid)")
+    @Schema(title = "Deployment ID (UUID)")
     @PluginProperty(group = "main")
     @NotNull
     private Property<String> deploymentId;

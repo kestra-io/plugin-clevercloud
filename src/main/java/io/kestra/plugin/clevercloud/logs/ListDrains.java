@@ -59,7 +59,7 @@ public class ListDrains extends AbstractLogsConnection implements RunnableTask<L
 
     @Schema(
         title = "How to fetch the results",
-        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ion file, NONE returns only the count."
+        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ION file, NONE returns only the count."
     )
     @PluginProperty(group = "processing")
     @Builder.Default
@@ -103,7 +103,7 @@ public class ListDrains extends AbstractLogsConnection implements RunnableTask<L
         @Schema(title = "First log drain returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no drain was found.")
         private final Drain drain;
 
-        @Schema(title = "URI of the stored log drains", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage.")
+        @Schema(title = "URI of the stored log drains", description = "Populated when fetchType is STORE, points to an ION file in Kestra internal storage.")
         private final URI uri;
 
         @Schema(title = "Total number of log drains returned")

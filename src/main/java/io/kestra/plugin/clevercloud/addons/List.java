@@ -76,7 +76,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
 
     @Schema(
         title = "How to fetch the results",
-        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ion file, NONE returns only the count."
+        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ION file, NONE returns only the count."
     )
     @PluginProperty(group = "processing")
     @Builder.Default
@@ -122,7 +122,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
 
         @Schema(
             title = "URI of the stored add-ons",
-            description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage."
+            description = "Populated when fetchType is STORE, points to an ION file in Kestra internal storage."
         )
         private final URI uri;
 
