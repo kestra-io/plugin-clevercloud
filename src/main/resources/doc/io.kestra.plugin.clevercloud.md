@@ -102,7 +102,7 @@ Polls a deployment until it reaches the configured `targetState`. By default it 
 
 ### organisations
 
-Tasks for managing organisations, members, applications, and add-ons.
+Tasks for managing organisations and their members.
 
 **`io.kestra.plugin.clevercloud.organisations.Get`**
 

@@ -98,7 +98,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
     @Builder.Default
     private Property<Integer> limit = Property.ofValue(50);
 
-    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ion file and returns its uri, NONE returns nothing but the count")
+    @Schema(title = "How to fetch the results", description = "FETCH returns all items in the task output, FETCH_ONE returns the first item, STORE writes the items to Kestra internal storage as an ION file and returns its URI, NONE returns nothing but the count")
     @PluginProperty(group = "processing")
     @Builder.Default
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
@@ -157,7 +157,7 @@ public class List extends AbstractCleverCloudConnection implements RunnableTask<
         @Schema(title = "First deployment returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no deployment was found")
         private final Deployment deployment;
 
-        @Schema(title = "URI of the stored deployments", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage")
+        @Schema(title = "URI of the stored deployments", description = "Populated when fetchType is STORE, points to an ION file in Kestra internal storage")
         private final URI uri;
 
         @Schema(title = "Total number of deployments returned")

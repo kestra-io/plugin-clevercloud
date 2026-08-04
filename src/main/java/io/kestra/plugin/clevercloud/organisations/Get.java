@@ -113,7 +113,7 @@ public class Get extends AbstractCleverCloudConnection implements RunnableTask<G
         @Schema(title = "Avatar URL")
         private final String avatar;
 
-        @Schema(title = "Billing contact email")
+        @Schema(title = "Contact email")
         private final String email;
 
         @Schema(title = "Whether the organisation has a Clever Enterprise contract")

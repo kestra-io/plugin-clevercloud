@@ -104,7 +104,7 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
 
     @Schema(
         title = "How to fetch the results",
-        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ion file, NONE returns only the count."
+        description = "FETCH returns all items, FETCH_ONE returns the first item, STORE saves them to internal storage as an ION file, NONE returns only the count."
     )
     @PluginProperty(group = "processing")
     @Builder.Default
@@ -114,7 +114,7 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
         title = "Maximum time to wait for the SSE stream before returning",
         description = "ISO-8601 duration. Hard client-side cap so this task always returns, even if the underlying " +
             "SSE connection never closes on its own. Whatever log lines were collected by then are returned. " +
-            "Defaults to PT30S, must be between PT1S and PT5M."
+            "Defaults to PT30S; must be greater than zero and at most PT5M."
     )
     @PluginProperty(group = "reliability")
     @Builder.Default
@@ -123,8 +123,8 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
     @Schema(
         title = "Maximum time to wait without receiving a new log line before returning",
         description = "ISO-8601 duration. Returns early with whatever was collected once no new log line arrives " +
-            "for this long, so a quiet application does not wait out the full maxDuration. Defaults to PT10S, " +
-            "must be between PT1S and maxDuration."
+            "for this long, so a quiet application does not wait out the full maxDuration. Defaults to PT10S; " +
+            "must be greater than zero and at most maxDuration."
     )
     @PluginProperty(group = "reliability")
     @Builder.Default
@@ -187,7 +187,7 @@ public class Fetch extends AbstractLogsConnection implements RunnableTask<Fetch.
         @Schema(title = "First log line returned by the API", description = "Populated when fetchType is FETCH_ONE, null if no log line was found.")
         private final LogEntry log;
 
-        @Schema(title = "URI of the stored log lines", description = "Populated when fetchType is STORE, points to an ion file in Kestra internal storage.")
+        @Schema(title = "URI of the stored log lines", description = "Populated when fetchType is STORE, points to an ION file in Kestra internal storage.")
         private final URI uri;
 
         @Schema(title = "Total number of log lines returned")
