@@ -10,7 +10,7 @@ All tasks and triggers authenticate with a single Bearer token sent as `Authoriz
 |---|---|---|---|
 | `apiToken` | yes | Clever Cloud API token | yes |
 
-Store `apiToken` as a [Kestra secret](https://kestra.io/docs/concepts/secret) and reference it with `{{ secret('CC_API_TOKEN') }}`. You can set it once using [plugin defaults](https://kestra.io/docs/workflow-components/plugin-defaults) to avoid repeating it in every task.
+Store `apiToken` as a [Kestra secret](https://kestra.io/docs/concepts/secret) and reference it with `{{ secret('CC_API_TOKEN') }}`.
 
 Generate an API token from the Clever Cloud console under **Profile > API tokens**.
 
