@@ -49,6 +49,11 @@ dependencies {
     annotationProcessor group: "io.kestra", name: "processor", version: kestraVersion
     compileOnly group: "io.kestra", name: "core", version: kestraVersion
     compileOnly group: "io.kestra", name: "script", version: kestraVersion
+
+    // Jackson 3 (tools.jackson), used only at the Micronaut 5 / HTTP boundary once the plugin runs on a
+    // Jackson-3 core. Kept off the runtime classpath (compileOnly) so this stays a no-op on the current
+    // Jackson-2-only core; version pinned to what core 2.x ships since no BOM provides it at this version.
+    compileOnly group: "tools.jackson.core", name: "jackson-databind", version: "3.1.6"
 }
 
 
@@ -88,6 +93,7 @@ dependencies {
     testImplementation "org.hamcrest:hamcrest"
     testImplementation "org.hamcrest:hamcrest-library"
     testImplementation "org.wiremock:wiremock-jetty12"
+    testImplementation group: "tools.jackson.core", name: "jackson-databind", version: "3.1.6"
 }
 
 /**********************************************************************************************************************\
